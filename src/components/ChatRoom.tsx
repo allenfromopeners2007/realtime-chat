@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Composer } from "@/components/Composer";
 import { DockPanel } from "@/components/DockPanel";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { LoginRequired } from "@/components/LoginRequired";
 import { MessageList } from "@/components/MessageList";
 import { AnnouncementBanner, RoomSettingsPanel } from "@/components/RoomSettingsPanel";
 import { Toast, type ToastState } from "@/components/Toast";
@@ -149,6 +150,11 @@ export function ChatRoom({
   const loadRoom = useCallback(
     async (roomId: string) => {
       if (!isSupabaseConfigured || roomId === "") return;
+      // 未登录：RLS 本来就不让读消息，不用白发一次请求
+      if (user === null) {
+        setMessages([]);
+        return;
+      }
       setLoadingRoom(true);
       try {
         const data = await apiFetch<{ messages: Message[] }>(
@@ -162,12 +168,12 @@ export function ChatRoom({
         setLoadingRoom(false);
       }
     },
-    [showToast],
+    [showToast, user?.id],
   );
 
   // ---------- Realtime：订阅当前群组的 INSERT ----------
   useEffect(() => {
-    if (!isSupabaseConfigured || activeRoomId === "") {
+    if (!isSupabaseConfigured || activeRoomId === "" || user === null) {
       setConnection("offline");
       return;
     }
@@ -222,20 +228,28 @@ export function ChatRoom({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [activeRoomId]);
+  }, [activeRoomId, user?.id]);
 
   // ---------- Realtime 掉线时的兜底轮询 ----------
   useEffect(() => {
     if (connection !== "offline" || !isSupabaseConfigured || activeRoomId === "") return;
+    if (user === null) return; // 未登录不轮询
     const timer = window.setInterval(() => {
       void loadRoom(activeRoomId);
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [connection, activeRoomId, loadRoom]);
+  }, [connection, activeRoomId, loadRoom, user?.id]);
 
   // ---------- 搜索：300ms 防抖 + 竞态保护 ----------
   useEffect(() => {
     const keyword = query.trim();
+    if (user === null) {
+      // 未登录不能读消息，搜索也没有意义（界面上会显示登录提示）
+      searchSeq.current += 1;
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
     if (keyword === "") {
       searchSeq.current += 1;
       setSearchResults(null);
@@ -268,7 +282,7 @@ export function ChatRoom({
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [query, showToast]);
+  }, [query, showToast, user?.id]);
 
   // ---------- 操作 ----------
   const handleSelectRoom = useCallback(
@@ -385,6 +399,11 @@ export function ChatRoom({
     try {
       await getSupabaseBrowserClient().auth.signOut();
       setUser(null);
+      // 关键：本地缓存的消息必须清掉。
+      // 不清的话，退出登录后屏幕上还留着刚才的聊天记录（共用电脑时就是泄露）。
+      setMessages([]);
+      setSearchResults(null);
+      setQuery("");
       showToast("info", "已退出登录");
       router.refresh();
     } catch (error) {
@@ -429,22 +448,26 @@ export function ChatRoom({
         />
       )}
 
-      <MessageList
-        messages={visibleMessages}
-        currentUserId={user?.id ?? null}
-        isAdmin={user?.isAdmin === true}
-        query={query}
-        loading={loadingRoom && !searchingActive}
-        searching={searching}
-        onOpenImage={setPreview}
-        onDeleteMessage={handleDeleteMessage}
-        emptyTitle={activeRoom ? "这里还很安静" : "还没有群组"}
-        emptyHint={
-          activeRoom
-            ? "登录后发出第一条消息，其他人会实时收到。"
-            : "点击右下角的悬浮按钮，创建一个群组开始聊天。"
-        }
-      />
+      {user === null ? (
+        <LoginRequired roomName={activeRoom?.name ?? ""} />
+      ) : (
+        <MessageList
+          messages={visibleMessages}
+          currentUserId={user.id}
+          isAdmin={user.isAdmin === true}
+          query={query}
+          loading={loadingRoom && !searchingActive}
+          searching={searching}
+          onOpenImage={setPreview}
+          onDeleteMessage={handleDeleteMessage}
+          emptyTitle={activeRoom ? "这里还很安静" : "还没有群组"}
+          emptyHint={
+            activeRoom
+              ? "发出第一条消息，其他人会实时收到。"
+              : "点击右下角的悬浮按钮，创建一个群组开始聊天。"
+          }
+        />
+      )}
 
       <Composer
         user={user}

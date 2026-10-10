@@ -136,6 +136,10 @@ export async function POST(request: NextRequest) {
       if (error.code === "23503") {
         return jsonError("群组不存在，请重新选择群组", 400);
       }
+      // 数据库层的限流触发器（security-hardening.sql）抛出的异常
+      if (/发言太快/.test(error.message)) {
+        return jsonError("发言太快了，请等几秒再发（每 10 秒最多 5 条）", 429);
+      }
       return jsonError(`发送失败：${error.message}`, 500, { code: error.code });
     }
 

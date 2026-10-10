@@ -80,12 +80,19 @@ export function TopBar({
                     )}
                   />
                 </span>
-                <span
-                  className={cn("flex items-center gap-1 text-[11px]", CONNECTION_COLOR[connection])}
-                >
-                  <DotIcon className="h-2.5 w-2.5" />
-                  {CONNECTION_TEXT[connection]}
-                </span>
+                {user === null ? (
+                  <span className="text-[11px] text-ink-500">未登录 · 仅可浏览群组</span>
+                ) : (
+                  <span
+                    className={cn(
+                      "flex items-center gap-1 text-[11px]",
+                      CONNECTION_COLOR[connection],
+                    )}
+                  >
+                    <DotIcon className="h-2.5 w-2.5" />
+                    {CONNECTION_TEXT[connection]}
+                  </span>
+                )}
               </span>
             </button>
           </div>
@@ -109,9 +116,10 @@ export function TopBar({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             type="search"
-            placeholder="搜索聊天记录…"
+            disabled={user === null}
+            placeholder={user === null ? "登录后可搜索聊天记录" : "搜索聊天记录…"}
             aria-label="搜索聊天记录"
-            className="h-10 w-full rounded-xl border border-ink-800 bg-ink-900 pl-9 pr-9 text-sm text-ink-100 outline-none transition placeholder:text-ink-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20"
+            className="h-10 w-full rounded-xl border border-ink-800 bg-ink-900 pl-9 pr-9 text-sm text-ink-100 outline-none transition placeholder:text-ink-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           />
           {query !== "" && (
             <button

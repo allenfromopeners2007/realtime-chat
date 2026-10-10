@@ -119,7 +119,8 @@ Supabase → SQL Editor → 粘贴 supabase/admin-migration.sql → Run
 ```
 
 > 如果还要群组管理（置顶公告 / 只允许管理员建群），再跑一次 `supabase/rooms-migration.sql`。
-> 三个脚本都是幂等的，顺序是：`schema.sql` → `admin-migration.sql` → `rooms-migration.sql`。
+> 最后跑 `supabase/security-hardening.sql` 做安全加固（**建议一定执行**）。
+> 四个脚本都是幂等的，顺序是：`schema.sql` → `admin-migration.sql` → `rooms-migration.sql` → `security-hardening.sql`。
 
 迁移会做四件事：给 `profiles` 加 `role` / `is_banned` 字段、把**最早注册的账号自动提升为管理员**、
 收紧 RLS（禁言用户发不出消息、管理员能删任何消息 / 改任何群组）、以及加两个只有管理员能调用的查询函数。
@@ -255,9 +256,13 @@ HTML 标题:   Application error: a server-side exception has occurred
 
 ### RLS 规则
 
-- `profiles` / `rooms` / `messages`：**所有人可读**（未登录也能看历史消息）
-- `messages` 插入：仅 `authenticated`，且 `auth.uid() = user_id` → 这就是"登录才能发言"的服务端保证
-- `rooms` 插入：仅 `authenticated`
+- `profiles` / `rooms`：**所有人可读**（群组名、用户名对未登录访客可见）
+- `messages` **读取**：`security-hardening.sql` 之后是**仅登录用户**（`to authenticated`）；
+  在那之前是 `using(true)`，即未登录访客也能读全部聊天记录
+- `messages` 插入：仅 `authenticated`，且 `auth.uid() = user_id`、未被禁言 → 这就是"登录才能发言"的服务端保证
+- `messages` 插入（限流）：`messages_rate_limit` 触发器，每人每 10 秒最多 5 条
+- `profiles` 更新：仅管理员（防止 `update profiles set role='admin'` 自我提权）
+- `rooms` 插入：仅管理员；更新/删除：仅管理员
 - Storage `chat-attachments`：bucket 公开可读；写入仅限登录用户，且对象路径第一段必须是自己的 `uid`
 
 ### Realtime
@@ -277,6 +282,62 @@ HTML 标题:   Application error: a server-side exception has occurred
 - **删除消息**：鼠标悬停消息 → 右上角出现垃圾桶图标 → 两步确认后删除。
   权限是「**消息作者本人** 或 **管理员**」（`messages_delete_own_or_admin` 策略）。
   删除时会连带清理 Storage 里的附件，并通过 Realtime 的 `DELETE` 事件**实时同步给其他在线的人**
+
+## 安全说明
+
+### 一句话模型
+
+**权限判断全在数据库（RLS）里，不在前端代码里。** 所以就算有人改掉浏览器里的 JS、直接调
+Supabase 的 REST 接口，也会被 Postgres 拒绝。项目**故意不放 `service_role` 密钥**
+（它能绕过所有 RLS），因此即使环境变量泄露，暴露的也只是本来就公开的 publishable key。
+
+### 自测：`npm run audit:security`
+
+这个脚本只用**公开的 anon key**（任何人按 F12 都能看到）尝试 15 项越权操作，应该全部被拦住：
+
+| 攻击动作 | 期望结果 |
+|---|---|
+| 匿名发消息 / 改别人的消息 / 删消息 | 被拦 |
+| **匿名把自己提权成管理员** | 被拦 |
+| 匿名改别人的用户名 | 被拦 |
+| 匿名建群 / 改群公告 / 删群 | 被拦 |
+| 匿名上传附件 / 删除任意附件 | 被拦 |
+| **匿名调 `admin_list_users()`**（会泄露全员邮箱） | 被拦 |
+| 匿名直接读 `auth.users` | 被拦 |
+| 回读数据确认没被篡改 | 无变化 |
+
+```bash
+npm run audit:security
+```
+
+### `supabase/security-hardening.sql` 加固了什么
+
+| 措施 | 解决的问题 |
+|---|---|
+| 消息读策略改成 `to authenticated` | 原来 `using(true)`：任何打开过网站的人（**不用登录**）都能用一句 REST 调用拉走全部聊天记录 |
+| 发言限流触发器（**每人每 10 秒最多 5 条**） | 原来一个注册账号就能一天刷几万条 |
+| `messages(user_id, created_at)` 索引 | 让限流检查走索引而不是全表扫 |
+
+### 已知限制与红线 ⚠️
+
+| 项 | 说明 |
+|---|---|
+| **不要重跑 `schema.sql`** | 它会覆盖后面几个迁移加固过的策略，`profiles_update_self` 会把**自我提权漏洞**带回来。真要重跑，就按 `schema → admin-migration → rooms-migration → security-hardening` 再来一遍 |
+| **不要放 `service_role`** | 一旦进前端或环境变量，等于全库无防护 |
+| **不要渲染用户提供的 HTML/Markdown** | 现在消息是纯文本渲染，链接只认 `http(s)://`，`javascript:` 进不来。一旦加了富文本渲染，XSS 会变成真风险（session cookie 不是 httpOnly） |
+| 附件 bucket 是公开的 | 图片 URL 谁拿到谁能看（`<img>` 需要）。**不要往聊天里传证件、合同等敏感文件** |
+| 成员名单 / 群组列表仍公开可读 | 未登录访客能看到群组名和用户名（消息已经看不到了） |
+| 上传能占空间 | 单文件上限 10MB（可用 `NEXT_PUBLIC_MAX_UPLOAD_BYTES` 调小）；`/admin` → 附件页可以删 |
+| **开放注册** | 建议在 Supabase 后台关掉 **Authentication → Sign In / Providers → Allow new users to sign up**，或打开 **Confirm email**。否则陌生人注册后就能发消息 |
+| 免费配额 | 被恶意刷会耗尽（Worker 10 万请求/天、Vercel 带宽、Supabase 免费额度）→ 结果是站点变慢/停服，不是数据泄露 |
+
+### 上线前检查清单
+
+- [ ] 执行 `supabase/security-hardening.sql`
+- [ ] Supabase 后台关闭开放注册（或打开邮箱验证）
+- [ ] `npm run audit:security` 全部通过
+- [ ] 部署平台的环境变量里**没有任何密钥**（只有 `NEXT_PUBLIC_*`，且不含 `service_role`）
+- [ ] 没有把 `.env.local` 提交到仓库（`.gitignore` 已包含）
 
 ## 常见问题
 

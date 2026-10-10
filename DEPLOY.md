@@ -29,10 +29,25 @@
 | GitHub 账号 | ✅ 你有 | 存代码，Vercel 从它拉取 |
 | Cloudflare 账号 | ✅ 要注册 | 免费，2 分钟；用来跑那个 Worker |
 | Vercel 账号 | ✅ 要注册 | 免费，建议直接用 GitHub 登录 |
-| **一个域名** | ⚠️ 强烈建议 | `*.workers.dev` 和 `*.vercel.app` 在国内普遍不稳/被墙。域名 ¥10–60/年 |
+| **一个域名** | ✅ **基本必须** | 见下方实测结论。域名 ¥10–60/年 |
 
-> 想先不花钱试：直接跳过第 6 步，用免费的 `*.workers.dev` + `*.vercel.app`。
-> 如果同学反馈打不开，再回来看第 6 步。
+> **实测结论（2026-10，中国大陆某 ISP，全部为不挂代理的直连测试）**
+>
+> | 目标 | 结果 | 说明 |
+> |---|---|---|
+> | `supabase-proxy.xxx.workers.dev` | ❌ 超时 | **`*.workers.dev` 被墙，免费子域不能用** |
+> | `www.cloudflare.com` | ✅ 200 | Cloudflare 边缘可达 |
+> | `developers.cloudflare.com` | ✅ 200 | 同上 |
+> | `cdnjs.cloudflare.com` | ✅ 200 | 第三方 Cloudflare 域名也通 → 不是官网特例 |
+> | `1.1.1.1` | ❌ 000 | Cloudflare 的 DNS 网站，被墙属正常 |
+>
+> 结论：**封锁针对的是 `workers.dev` 这个域名，不是 Cloudflare 的 IP。**
+> 所以**必须做第 6 步把自定义域名绑到 Worker 上**，绑完直连就能通。
+>
+> 自测命令（在终端直连测试，`curl.exe` 不读系统代理）：
+> ```powershell
+> curl.exe -s https://sb.你的域名/__health
+> ```
 
 ---
 

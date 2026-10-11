@@ -35,8 +35,9 @@ export function LoginRequired({ roomName }: { roomName: string }) {
         </Link>
 
         <p className="mt-3 text-[11px] leading-relaxed text-ink-500">
-          没有账号？本聊天室是<strong className="font-medium text-ink-400">邀请制</strong> ——
-          请管理员给你发一个邀请邮件，点邮件里的链接设好密码，就能登录了 ✓
+          No account yet? This chat room is{" "}
+          <strong className="font-medium text-ink-400">invite-only</strong> — ask the admin to send
+          you an invitation email. Click the link in it, set your password, and you can sign in.
         </p>
       </div>
     </div>

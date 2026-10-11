@@ -6,7 +6,46 @@
 
 # 一、给同学的话（可直接复制发群）
 
-> 📋 下面这段可以直接整段复制到群里
+> 📋 下面这两段都可以直接整段复制到群里 ✓ 按同学的语言挑一段 ✓
+> （UI 标签是中文，所以英文段里把对应的中文按钮名写在括号里 ✓）
+
+## English version
+
+```
+Our chat room is live 🎉
+
+URL: https://app.theopener.top
+(works on a normal connection — no VPN needed)
+
+How to get in:
+1. Ask the admin (group owner) for an invite — send him the email address you want to use
+2. You'll get an invitation email
+   ⚠️ Can't find it? Check your Spam / Other folder (QQ Mail puts it under "Other")
+3. Click the link in the email → set your password
+4. Go back to https://app.theopener.top and sign in with your email + that password
+
+(This chat room is invite-only — there is no self sign-up form.)
+
+What you can do:
+• Send text, images (just Ctrl+V a screenshot) and files
+• Voice messages: tap the 🎤 left of the input box, record (max 2 min), hit Done (完成) to send.
+  Others play it right inside the message.
+  ⚠️ The first time your browser asks for microphone permission — choose Allow.
+     If you denied it by accident, click the icon at the left of the address bar and allow the mic.
+• Voice calls: bottom-right purple button → the "Members" (联系人) tab → tap the 📞 next to someone.
+  They answer, and you can talk.
+  ⚠️ Needs microphone permission too. During a call the top bar shows the timer, mute and hang up.
+• Switch rooms: tap the room name at the top, or the purple button at the bottom right
+• Search chat history: the search box at the top
+• Delete your own message: hover it → trash icon at the top right
+
+Please note:
+• You must sign in to read or post messages
+• Posting too fast is rate-limited (max 5 messages per 10 seconds)
+• No ads or unrelated links — you'll be muted
+```
+
+## 中文版
 
 ```
 我们的聊天室上线了 🎉

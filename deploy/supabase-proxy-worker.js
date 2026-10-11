@@ -50,13 +50,6 @@ export default {
       return json({ error: "Not found" }, 404);
     }
 
-    // 公开对象（消息里的图片等）允许匿名读取；
-    // 其余路径必须带 apikey（正常前端一定会带），挡掉顺手白嫖流量的人
-    const isPublicObject = url.pathname.startsWith("/storage/v1/object/public/");
-    if (!isPublicObject && !request.headers.get("apikey")) {
-      return json({ error: "missing apikey" }, 401);
-    }
-
     // 把请求原样转发到 Supabase
     // 用原 request 作为 init：method / body / 所有头（含 Upgrade，实时 WebSocket 靠它透传）都会保留
     const target = new URL(request.url);
@@ -64,9 +57,25 @@ export default {
     target.hostname = upstreamHost;
     target.port = "";
 
-    const upstreamResponse = await fetch(new Request(target.toString(), request), {
-      redirect: "manual",
-    });
+    const forward = () => fetch(new Request(target.toString(), request), { redirect: "manual" });
+
+    // ⚠️⚠️ 这一条不能少：CORS 预检请求（OPTIONS）**不携带 apikey 等自定义头**
+    // （浏览器只会在 Access-Control-Request-Headers 里列出它们）。
+    // 如果在这里按"缺 apikey"拒绝，浏览器就会判定跨域失败，
+    // 前端表现为 `Failed to fetch` —— 登录、上传全部挂掉。
+    // 所以预检必须直接转给 Supabase，让它返回标准的 CORS 头。
+    if (request.method === "OPTIONS") {
+      return forward();
+    }
+
+    // 公开对象（消息里的图片等）允许匿名读取；
+    // 其余路径必须带 apikey（正常前端一定会带），挡掉顺手白嫖流量的人
+    const isPublicObject = url.pathname.startsWith("/storage/v1/object/public/");
+    if (!isPublicObject && !request.headers.get("apikey")) {
+      return json({ error: "missing apikey" }, 401);
+    }
+
+    const upstreamResponse = await forward();
 
     // Supabase 有时会返回跳转（Location 指向 supabase.co）。
     // 必须改写成我们自己的域名，否则浏览器会去直连那个被墙的地址。

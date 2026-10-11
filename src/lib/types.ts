@@ -8,6 +8,8 @@
  * 所以统一在这里转成前端只认的 Message / Room / Member 类型。
  */
 
+import { normalizeRole } from "@/lib/roles";
+
 export type Attachment = {
   /**
    * image：图片（可直接预览）
@@ -62,6 +64,8 @@ export type SessionUser = {
   avatarUrl: string | null;
   /** 是否是管理员（决定顶栏要不要显示「管理」入口） */
   isAdmin?: boolean;
+  /** 是不是所有者（只有所有者能任免管理员） */
+  isOwner?: boolean;
 };
 
 /** 管理页：用户行 */
@@ -69,7 +73,7 @@ export type AdminUser = {
   id: string;
   username: string;
   email: string | null;
-  role: "admin" | "member";
+  role: "owner" | "admin" | "member";
   isBanned: boolean;
   bannedReason: string | null;
   createdAt: string;
@@ -215,7 +219,7 @@ export function normalizeAdminUser(row: unknown): AdminUser {
     id: str(source.id),
     username: str(source.username, "匿名用户"),
     email: strOrNull(source.email),
-    role: source.role === "admin" ? "admin" : "member",
+    role: normalizeRole(source.role),
     isBanned: source.is_banned === true || source.isBanned === true,
     bannedReason: strOrNull(source.banned_reason ?? source.bannedReason),
     createdAt: str(source.created_at ?? source.createdAt),

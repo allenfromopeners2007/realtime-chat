@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { AlertIcon, LockIcon } from "@/components/icons";
+import { isAdminRole, isOwnerRole } from "@/lib/roles";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -86,15 +87,23 @@ export default async function AdminPage() {
     );
   }
 
-  if (profile?.role !== "admin") {
+  if (!profile || !isAdminRole(profile.role)) {
     return (
       <Notice
         tone="deny"
         title="需要管理员权限"
-        detail="你的账号目前是普通成员。用下面的 SQL 把某个账号提升为管理员（记得把邮箱换成你的），然后刷新本页。"
+        detail="你的账号目前是普通成员。请让站长（所有者）在后台把你设为管理员。"
       />
     );
   }
 
-  return <AdminDashboard admin={{ id: user.id, name: String(profile.username ?? "") }} />;
+  return (
+    <AdminDashboard
+      admin={{
+        id: user.id,
+        name: String(profile.username ?? ""),
+        isOwner: isOwnerRole(profile.role),
+      }}
+    />
+  );
 }

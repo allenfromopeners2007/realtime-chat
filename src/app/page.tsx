@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ChatRoom } from "@/components/ChatRoom";
 import { SetupNotice } from "@/components/SetupNotice";
+import { isAdminRole, isOwnerRole } from "@/lib/roles";
 import { isSupabaseConfigured, SUPABASE_URL_SERVER } from "@/lib/env";
 import { describeError, hintForFetchError } from "@/lib/errors";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -76,6 +77,7 @@ async function loadInitialData(supabase: SupabaseClient): Promise<InitialData> {
     // 额外查一次当前用户的角色，决定顶栏要不要显示「管理」入口。
     // 如果还没执行 admin-migration.sql，这里会报字段不存在 → 当作普通用户处理，不影响聊天。
     let isAdmin = false;
+    let isOwner = false;
     if (authUser) {
       const { data: roleRow, error: roleError } = await supabase
         .from("profiles")
@@ -85,7 +87,8 @@ async function loadInitialData(supabase: SupabaseClient): Promise<InitialData> {
       if (roleError) {
         console.warn("[page] 读取角色失败（可能还没执行 admin-migration.sql）：", roleError.message);
       } else {
-        isAdmin = roleRow?.role === "admin";
+        isAdmin = isAdminRole(roleRow?.role);
+        isOwner = isOwnerRole(roleRow?.role);
       }
     }
 
@@ -96,6 +99,7 @@ async function loadInitialData(supabase: SupabaseClient): Promise<InitialData> {
           name: displayNameOf(authUser),
           avatarUrl: typeof avatar === "string" ? avatar : null,
           isAdmin,
+          isOwner,
         }
       : null;
 

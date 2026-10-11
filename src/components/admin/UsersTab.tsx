@@ -20,10 +20,12 @@ import { normalizeAdminUser, type AdminUser } from "@/lib/types";
 
 type Props = {
   adminId: string;
+  /** 是不是所有者：只有所有者能任免管理员 */
+  isOwner: boolean;
   notify: (kind: "success" | "error" | "info", text: string) => void;
 };
 
-export function UsersTab({ adminId, notify }: Props) {
+export function UsersTab({ adminId, isOwner, notify }: Props) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +134,9 @@ export function UsersTab({ adminId, notify }: Props) {
                 <Td className="text-ink-400">{user.email ?? "—"}</Td>
 
                 <Td>
-                  {user.role === "admin" ? (
+                  {user.role === "owner" ? (
+                    <Badge tone="brand">👑 所有者</Badge>
+                  ) : user.role === "admin" ? (
                     <Badge tone="brand">管理员</Badge>
                   ) : (
                     <Badge>成员</Badge>
@@ -168,7 +172,10 @@ export function UsersTab({ adminId, notify }: Props) {
                       改名
                     </Button>
 
-                    {user.role === "admin" ? (
+                    {/* 任免管理员：只有所有者(owner)能操作 ✓ 普通管理员看不到这些按钮 */}
+                    {isOwner && user.role === "owner" ? (
+                      <span className="px-1 text-[10px] text-ink-500">所有者不可降级</span>
+                    ) : isOwner && user.role === "admin" ? (
                       <Button
                         onClick={() =>
                           void patch(user.id, { action: "setRole", role: "member" }, "已降为普通成员")
@@ -178,7 +185,7 @@ export function UsersTab({ adminId, notify }: Props) {
                       >
                         降为成员
                       </Button>
-                    ) : (
+                    ) : isOwner ? (
                       <Button
                         variant="primary"
                         onClick={() =>
@@ -188,7 +195,7 @@ export function UsersTab({ adminId, notify }: Props) {
                       >
                         设为管理员
                       </Button>
-                    )}
+                    ) : null}
 
                     {user.isBanned ? (
                       <Button

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NextResponse } from "next/server";
 
 import { jsonError } from "@/lib/api-response";
+import { isAdminRole, isOwnerRole } from "@/lib/roles";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -9,6 +10,8 @@ export type AdminContext = {
   supabase: SupabaseClient;
   userId: string;
   username: string;
+  /** owner / admin / member —— 用来区分"所有者"和普通管理员 */
+  role: string;
 };
 
 type AdminGuard = { ok: true; ctx: AdminContext } | { ok: false; response: NextResponse };
@@ -50,14 +53,28 @@ export async function requireAdmin(): Promise<AdminGuard> {
     };
   }
 
-  if (!data || data.role !== "admin") {
+  if (!data || !isAdminRole(data.role)) {
     return { ok: false, response: jsonError("需要管理员权限", 403) };
   }
 
   return {
     ok: true,
-    ctx: { supabase, userId: user.id, username: String(data.username ?? "") },
+    ctx: { supabase, userId: user.id, username: String(data.username ?? ""), role: String(data.role ?? "member") },
   };
+}
+
+/**
+ * 更严格的一层：只有**所有者(owner)** 能过。
+ * 用在"任免管理员"这类高危操作上 —— 普通管理员不能改别人的角色 ✓
+ */
+export async function requireOwner(): Promise<AdminGuard> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  if (!isOwnerRole(guard.ctx.role)) {
+    return { ok: false, response: jsonError("只有所有者可以任免管理员", 403) };
+  }
+  return guard;
 }
 
 /** 把数据库抛出的约束错误翻译成人话 */

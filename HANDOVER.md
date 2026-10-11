@@ -93,7 +93,21 @@ Please note:
 | **删账号** | Users → `⋮` → **Delete user** |
 | **禁言某人** | `/admin` → 用户 → 找那个人 → **禁言**（他还能登录看消息，但发不出） |
 | **解除禁言** | 同上 → **解除禁言** |
-| **给某人管理员权限** | `/admin` → 用户 → **设为管理员`<br>`⚠️ 至少会保留一个管理员，系统不允许把最后一个降级 |
+| **给某人管理员权限** | `/admin` → 用户 → **设为管理员`<br>`⚠️ 只有「所有者」能看到这个按钮；普通管理员看不到（数据库触发器也会再拦一次 ✓）|
+
+## 三种角色（2026-10-11 起）
+
+| 角色 | 能做什么 | 谁有 |
+|---|---|---|
+| 👑 **所有者 owner** | 管理员的一切 + **任免管理员**（唯一能改别人角色的） | 只有站长（Allen）✓ |
+| **管理员 admin** | 删任何消息、禁言/解禁、改名、管群组、进后台、发邀请 | 你指定的人 ✓ |
+| **成员 member** | 发消息/语音/文件、语音通话、删自己的消息 | 同学们 ✓ |
+
+> 🔒 **所有者不能被降级、不能被禁言**（网站上做不到 ✓ 数据库触发器会拒绝 ✓）
+> 这是为了防止"某个管理员一气之下把站长踢了"这种情况 ✓
+> 要转移所有权：去 Supabase → SQL Editor 执行
+> `update public.profiles set role='owner' where id='<新站长的 uid>';`
+> 再把自己改回 admin：`update public.profiles set role='admin' where id='<你的 uid>';`
 
 > ⭐ **关于邀请制**（2026-10-11 起生效）：
 > Supabase 里 **「Allow new users to sign up」已关闭** ✓
@@ -177,7 +191,8 @@ git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 pus
 | 红线 | 原因 |
 |---|---|
 | **绝不能让 `service_role` / `sb_secret_...` 进入浏览器或前端代码** ⚠️ | 它能绕过所有 RLS，等于全库钥匙。**唯一例外**：`SUPABASE_SERVICE_ROLE_KEY` 放在服务端环境变量里（**不加 `NEXT_PUBLIC_` 前缀**），且只在 `/api/admin/invite` 这一个接口里使用 —— 这是 Supabase 官方发邀请的标准做法 ✓ 换别的密钥时请对照这条规则 ✓ |
-| **不要重跑 `supabase/schema.sql`** | 会覆盖加固过的策略（自我提权漏洞会回来）。要重跑就按顺序全跑一遍：`schema → admin-migration → rooms-migration → security-hardening` |
+| **不要重跑 `supabase/schema.sql`** | 会覆盖加固过的策略（自我提权漏洞会回来）。要重跑就按顺序全跑一遍：`schema → admin-migration → rooms-migration → security-hardening → owner-migration` |
+| **所有者(owner)只有一个，且不能被网站上降级** | `owner-migration.sql` 里规定的规则：只有所有者能任免管理员；所有者不能被降级/封禁（要转移所有权只能在 SQL Editor 里执行 `update profiles set role='owner' where id='<uid>'`）|
 | 不要渲染用户提供的 HTML/Markdown | 现在消息是纯文本，链接只认 http(s)；一旦加富文本渲染，XSS 就会变成真风险 |
 | 别往聊天里传证件、合同等敏感文件 | 附件 bucket 是公开可读的（图片要在 `<img>` 里显示） |
 | 部署平台的环境变量里只放 `NEXT_PUBLIC_*` | 不要加 `HTTP_PROXY` 之类（那是本地开发用的） |

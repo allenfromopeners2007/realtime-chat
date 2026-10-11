@@ -22,7 +22,11 @@ const TABS: Array<{ id: Tab; label: string; hint: string; Icon: typeof UsersIcon
   { id: "files", label: "附件", hint: "浏览 Storage / 清理", Icon: FileIcon },
 ];
 
-export function AdminDashboard({ admin }: { admin: { id: string; name: string } }) {
+export function AdminDashboard({
+  admin,
+}: {
+  admin: { id: string; name: string; isOwner: boolean };
+}) {
   const [tab, setTab] = useState<Tab>("users");
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -78,7 +82,9 @@ export function AdminDashboard({ admin }: { admin: { id: string; name: string } 
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 py-5">
-        {tab === "users" && <UsersTab adminId={admin.id} notify={notify} />}
+        {tab === "users" && (
+          <UsersTab adminId={admin.id} isOwner={admin.isOwner} notify={notify} />
+        )}
         {tab === "invite" && <InviteTab notify={notify} />}
         {tab === "rooms" && <RoomsTab notify={notify} />}
         {tab === "messages" && <MessagesTab notify={notify} />}

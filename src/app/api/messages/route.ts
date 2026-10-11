@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { isAdminRole } from "@/lib/roles";
 import { jsonError, jsonOk, jsonUnauthorized, readJsonBody } from "@/lib/api-response";
 import { isSupabaseConfigured, MAX_MESSAGE_LENGTH, STORAGE_BUCKET } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";

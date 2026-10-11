@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { jsonError, jsonOk, readJsonBody } from "@/lib/api-response";
-import { mapAdminError, requireAdmin } from "@/lib/admin";
+import { mapAdminError, requireAdmin, requireOwner } from "@/lib/admin";
 import { normalizeAdminUser } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (action === "setRole") {
+    // 任免管理员属于高危操作：只有所有者能做（数据库触发器也会再校验一次 ✓）
+    const ownerGuard = await requireOwner();
+    if (!ownerGuard.ok) return ownerGuard.response;
+
     const role = parsed.data.role === "admin" ? "admin" : parsed.data.role === "member" ? "member" : null;
     if (!role) return jsonError("role 只能是 admin 或 member", 400);
 

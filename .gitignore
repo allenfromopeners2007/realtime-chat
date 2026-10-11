@@ -12,3 +12,7 @@ yarn-error.log*
 .env*.local
 .vercel
 *.tsbuildinfo
+
+# Cloudflare wrangler 的本地凭据/缓存（不要提交）
+.wrangler/
+.dev.vars

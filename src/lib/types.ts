@@ -9,7 +9,12 @@
  */
 
 export type Attachment = {
-  kind: "image" | "file";
+  /**
+   * image：图片（可直接预览）
+   * audio：语音消息（渲染成播放器）
+   * file：其它文件（渲染成下载卡片）
+   */
+  kind: "image" | "audio" | "file";
   name: string;
   size: number;
   mime: string;
@@ -17,6 +22,8 @@ export type Attachment = {
   path: string;
   /** 可直接访问的公开 URL */
   url: string;
+  /** 语音消息时长（毫秒）；只有 kind === "audio" 时有值 */
+  durationMs?: number;
 };
 
 export type Message = {
@@ -137,7 +144,16 @@ export function normalizeAttachment(value: unknown): Attachment | null {
   if (url === "") return null;
 
   const mime = str(source.mime, "application/octet-stream");
-  const kind = source.kind === "image" || mime.startsWith("image/") ? "image" : "file";
+  const kind =
+    source.kind === "audio" || mime.startsWith("audio/")
+      ? "audio"
+      : source.kind === "image" || mime.startsWith("image/")
+        ? "image"
+        : "file";
+
+  // 语音时长：只对语音有意义，其它类型不带这个字段
+  const rawDuration = num(source.durationMs ?? source.duration_ms, 0);
+  const durationMs = kind === "audio" && rawDuration > 0 ? Math.round(rawDuration) : undefined;
 
   return {
     kind,
@@ -146,6 +162,7 @@ export function normalizeAttachment(value: unknown): Attachment | null {
     mime,
     path: str(source.path),
     url,
+    durationMs,
   };
 }
 

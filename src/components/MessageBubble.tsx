@@ -4,9 +4,10 @@ import { useState, type ReactNode } from "react";
 
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/admin/ui";
-import { CheckIcon, DownloadIcon, FileIcon, TrashIcon } from "@/components/icons";
+import { CheckIcon, DownloadIcon, FileIcon, MicIcon, TrashIcon } from "@/components/icons";
 import { cn, formatBytes, formatTime, linkifyParts } from "@/lib/format";
 import type { Attachment, Message } from "@/lib/types";
+import { formatDuration } from "@/lib/voice";
 
 type Props = {
   message: Message;
@@ -89,6 +90,32 @@ function AttachmentView({
           className="max-h-72 w-auto max-w-[min(20rem,70vw)] object-cover transition group-hover/img:opacity-95"
         />
       </button>
+    );
+  }
+
+  if (attachment.kind === "audio") {
+    return (
+      <div className="mt-1.5 flex max-w-sm items-center gap-3 rounded-2xl border border-ink-800 bg-ink-900 px-3 py-2.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300">
+          <MicIcon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <audio
+            controls
+            preload="metadata"
+            src={attachment.url}
+            className="h-9 w-full max-w-[16rem]"
+          >
+            {/* 极老浏览器不支持 audio 时的兜底：给个下载链接 */}
+            <a href={attachment.url} target="_blank" rel="noreferrer noopener">
+              下载语音
+            </a>
+          </audio>
+          <span className="mt-0.5 block text-[11px] text-ink-400">
+            {attachment.durationMs ? `语音 · ${formatDuration(attachment.durationMs)}` : "语音消息"}
+          </span>
+        </span>
+      </div>
     );
   }
 

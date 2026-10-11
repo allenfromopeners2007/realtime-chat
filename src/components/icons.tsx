@@ -203,6 +203,25 @@ export function GearIcon({ className = "h-5 w-5", ...rest }: IconProps) {
   );
 }
 
+export function MicIcon({ className = "h-5 w-5", ...rest }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...rest}>
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+      <path d="M12 17.5V21" />
+      <path d="M8.5 21h7" />
+    </svg>
+  );
+}
+
+export function StopIcon({ className = "h-5 w-5", ...rest }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...rest}>
+      <rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function TrashIcon({ className = "h-5 w-5", ...rest }: IconProps) {
   return (
     <svg {...baseProps} className={className} {...rest}>

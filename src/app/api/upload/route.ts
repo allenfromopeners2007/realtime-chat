@@ -99,7 +99,10 @@ export async function POST(request: NextRequest) {
 
     const mime = file.type || "application/octet-stream";
     const isImage = mime.startsWith("image/");
-    if (!isImage && !ALLOWED_FILE_MIME.has(mime)) {
+    // 语音消息：浏览器 MediaRecorder 录出来的音频（webm/mp4/ogg…）一律放行。
+    // 注意 mime 可能带参数（如 audio/webm;codecs=opus），所以用 startsWith 判断。
+    const isAudio = mime.startsWith("audio/");
+    if (!isImage && !isAudio && !ALLOWED_FILE_MIME.has(mime)) {
       return jsonError(`不支持的文件类型：${mime}`, 415);
     }
 
@@ -145,7 +148,7 @@ export async function POST(request: NextRequest) {
       .getPublicUrl(objectPath);
 
     const attachment: Attachment = {
-      kind: isImage ? "image" : "file",
+      kind: isImage ? "image" : isAudio ? "audio" : "file",
       name: file.name || "未命名文件",
       size: file.size,
       mime,

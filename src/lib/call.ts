@@ -32,10 +32,17 @@ export const DEFAULT_STUN_URLS = [
   "stun:stun.l.google.com:19302",
 ];
 
+/**
+ * TURN 配置。
+ * 两种形态都支持：
+ *   - Cloudflare 返回的 `urls: string[]`（一次给 udp/tcp/tls 多个地址）
+ *   - 静态配置的 `url: string`（单个地址）
+ */
 export type TurnConfig = {
-  url: string;
-  username: string;
-  credential: string;
+  urls?: string | string[];
+  url?: string;
+  username?: string;
+  credential?: string;
 };
 
 /** 拒接的原因：declined = 手动点了拒绝；busy = 他正在通话中 */
@@ -140,10 +147,13 @@ export function parseSignalMessage(value: unknown): SignalMessage | null {
 /** 组装 RTCPeerConnection 的 iceServers（配了 TURN 就带上，明显提高连通率） */
 export function buildIceServers(turn: TurnConfig | null): RTCIceServer[] {
   const servers: RTCIceServer[] = [{ urls: DEFAULT_STUN_URLS }];
-  const url = turn?.url?.trim();
-  if (url) {
+
+  const urls = turn?.urls ?? turn?.url;
+  const hasUrls = Array.isArray(urls) ? urls.length > 0 : (urls ?? "").trim() !== "";
+
+  if (hasUrls) {
     servers.push({
-      urls: url,
+      urls: urls as string | string[],
       username: turn?.username ?? "",
       credential: turn?.credential ?? "",
     });

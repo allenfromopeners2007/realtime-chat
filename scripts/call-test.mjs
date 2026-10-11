@@ -123,6 +123,25 @@ console.log("========== 4) ICE 配置 ==========");
 
   const blank = buildIceServers({ url: "   ", username: "u", credential: "p" });
   check("TURN 地址是空白 → 当没配", blank.length === 1);
+
+  // Cloudflare /api/turn 返回的是 urls 数组形态
+  const cloudflare = buildIceServers({
+    urls: [
+      "stun:stun.cloudflare.com:3478",
+      "turn:turn.cloudflare.com:3478?transport=udp",
+      "turns:turn.cloudflare.com:5349?transport=tcp",
+    ],
+    username: "cf-user",
+    credential: "cf-pass",
+  });
+  check("Cloudflare 的 urls 数组形态能识别", cloudflare.length === 2);
+  check(
+    "多个 url 原样带入",
+    Array.isArray(cloudflare[1].urls) && cloudflare[1].urls.length === 3,
+    JSON.stringify(cloudflare[1].urls),
+  );
+  const emptyUrls = buildIceServers({ urls: [], username: "u", credential: "p" });
+  check("urls 是空数组 → 当没配", emptyUrls.length === 1);
 }
 
 console.log("");

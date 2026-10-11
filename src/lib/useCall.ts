@@ -70,6 +70,8 @@ type Options = {
 export function useCall({ user, members, notify }: Options) {
   const [state, setState] = useState<CallState>(IDLE);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  /** TURN 是否可用（静态配置或服务端换来的短期凭据），用来决定要不要给用户提示 */
+  const [turnAvailable, setTurnAvailable] = useState(TURN_CONFIG !== null);
 
   const stateRef = useRef<CallState>(IDLE);
   // 收到的 ICE 候选可能比 offer/answer 先到，先排队，设置了远端描述再补进去
@@ -201,13 +203,41 @@ export function useCall({ user, members, notify }: Options) {
     return stream;
   }, []);
 
+  /**
+   * 解析本次通话要用的 ICE 配置。
+   *
+   * 优先向 /api/turn 换**短期 TURN 凭据**（Cloudflare 的密钥只在服务端 ✓），
+   * 拿不到就退回静态配置 / 只用 STUN —— 通话本身不会因此失败，只是连通率低一些。
+   */
+  const resolveIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
+    const fallback = buildIceServers(TURN_CONFIG);
+    try {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 3_000);
+      const response = await fetch("/api/turn", { signal: controller.signal });
+      window.clearTimeout(timer);
+      if (!response.ok) return fallback;
+
+      const data = (await response.json()) as { iceServers?: unknown };
+      if (!data.iceServers || typeof data.iceServers !== "object") return fallback;
+
+      const servers = buildIceServers(data.iceServers as Parameters<typeof buildIceServers>[0]);
+      if (servers.length > 1) setTurnAvailable(true);
+      return servers;
+    } catch (error) {
+      console.warn("[call] 获取 TURN 凭据失败，退回 STUN", error);
+      return fallback;
+    }
+  }, []);
+
   /** 建立（或复用）RTCPeerConnection */
   const ensurePeer = useCallback(
     async (peerId: string, callId: string): Promise<RTCPeerConnection> => {
       if (pcRef.current) return pcRef.current;
 
       const myId = user?.id ?? "";
-      const pc = new RTCPeerConnection({ iceServers: buildIceServers(TURN_CONFIG) });
+      const iceServers = await resolveIceServers();
+      const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
 
       const stream = await openMic();
@@ -259,7 +289,7 @@ export function useCall({ user, members, notify }: Options) {
 
       return pc;
     },
-    [finish, openMic, sendSignal, update, user?.id],
+    [finish, openMic, resolveIceServers, sendSignal, update, user?.id],
   );
 
   /** 把排队中的 ICE 候选补进去 */
@@ -596,7 +626,7 @@ export function useCall({ user, members, notify }: Options) {
     rejectCall,
     hangUp,
     toggleMute,
-    /** TURN 是否已配置（界面上用来给提示） */
-    turnConfigured: TURN_CONFIG !== null,
+    /** TURN 是否可用（界面上用来给提示） */
+    turnConfigured: turnAvailable,
   };
 }

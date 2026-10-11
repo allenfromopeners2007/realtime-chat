@@ -148,21 +148,53 @@ npm.cmd run dev:proxy         # 本地开发（带代理，国内必须用这个
 > 然后用 Edge 登录你自己的号、Chrome 登录测试号，互相呼叫 ✓
 > 同一台电脑上用两个浏览器时建议**戴耳机**（否则会有回音 ✓）
 
-### 语音通话连不上怎么办（TURN 服务器）
+### 语音通话连不上怎么办（配置 TURN 服务器）
 
-语音通话默认走 **P2P 直连**。国内大约 **10-30%** 的网络组合（很多 4G/5G、公司网络）
-因为 NAT 太复杂而**连不上** ✗ 界面会提示「双方网络无法直连（需要配置 TURN 服务器）」。
+语音通话默认走 **P2P 直连**。国内大约 **10-30%** 的网络组合（很多 4G/5G、公司网络、
+以及两边都在运营商大内网的情况）因为 NAT 太复杂而**连不上** ✗
+界面会提示：**「连接失败：双方网络无法直连（需要配置 TURN 服务器）」**
 
-解决办法是配一个 **TURN 中继**（音频经它转发）。推荐 Cloudflare（你已有账号）：
+解决办法是配一个 **TURN 中继**（音频经它转发）。用 Cloudflare（你已有账号）：
 
-1. 打开 https://developers.cloudflare.com/realtime/turn/ 按文档创建一个 TURN 应用
-2. 拿到三段信息后，填到 **Netlify → Site configuration → Environment variables**：
-   ```
-   NEXT_PUBLIC_TURN_URL=turn:turn.cloudflare.com:3478
-   NEXT_PUBLIC_TURN_USERNAME=...
-   NEXT_PUBLIC_TURN_CREDENTIAL=...
-   ```
-3. **Trigger deploy** 重新部署（`NEXT_PUBLIC_*` 是构建时打进前端的，必须重新部署 ✓）
+**① 在 Cloudflare 创建 TURN 应用**
 
-配好后通话会自动优先走 TURN ✓ 不用改代码 ✓
-⚠️ 因为这三个变量会出现在前端代码里，所以**用短期凭据**，别填长期密钥 ✓
+```
+Cloudflare 控制台 → 左侧 Build 分组里的「Realtime」→ TURN → 创建
+   ↓
+拿到两个值：Key ID  和  API Token（Token 只显示一次，立刻复制）
+```
+
+> 找不到入口就把左侧菜单截图发给 AI 助手，让它指位置 ✓
+
+**② 填到 Netlify（⚠️ 注意这两个变量名前面没有 NEXT_PUBLIC_）**
+
+Netlify → **Site configuration → Environment variables** → 添加：
+
+| 变量名 | 值 |
+|---|---|
+| `CLOUDFLARE_TURN_KEY_ID` | 刚才的 Key ID |
+| `CLOUDFLARE_TURN_API_TOKEN` | 刚才的 API Token |
+
+> 🔐 **为什么不带 `NEXT_PUBLIC_`**：这两个是密钥，只能留在服务端 ✓
+> 浏览器要用的短期凭据由 `/api/turn` 这个接口现换现发（已限制必须登录才能调用 ✓）
+
+**③ 重新部署**
+
+Netlify → **Deploys → Trigger deploy → Deploy site**
+
+**④ 重新测通话** → 应该就能听见了 ✓
+
+---
+
+### 想用别的 TURN 服务（可选）
+
+如果你的 TURN 服务商给的是**固定账号密码**（不是短期凭据），可以直接填这三个
+`NEXT_PUBLIC_` 变量，代码会自动使用它们：
+
+```
+NEXT_PUBLIC_TURN_URL=turn:your-turn-server:3478
+NEXT_PUBLIC_TURN_USERNAME=...
+NEXT_PUBLIC_TURN_CREDENTIAL=...
+```
+
+⚠️ 因为它们会进前端代码，所以**别用长期密钥** ✗ 优先用上面 Cloudflare 的方案 ✓

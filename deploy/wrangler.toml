@@ -1,0 +1,45 @@
+# ============================================================================
+#  Cloudflare Worker 部署配置（Supabase 反向代理）
+# ============================================================================
+#
+#  首次使用：
+#      npx wrangler login              ← 浏览器里授权一次（之后就不用再登）
+#  以后每次改完 Worker 只需要：
+#      npm run worker:deploy           ← 一条命令部署，不用再打开网页编辑器粘贴
+#
+#  看线上日志（调试实时/转发问题的利器）：
+#      npm run worker:tail
+#
+#  如果 wrangler 连不上 Cloudflare API（国内网络），先设置代理再跑：
+#      $env:NODE_USE_ENV_PROXY=1; $env:HTTPS_PROXY="http://127.0.0.1:7897"; npm run worker:deploy
+# ============================================================================
+
+name = "supabase-proxy"
+main = "supabase-proxy-worker.js"
+
+# 兼容性日期：决定运行时提供哪些 Web 平台特性。
+# 这个 Worker 只用了标准的 Request / Response / URL / Headers / fetch，
+# 不需要额外的 compatibility_flags。
+compatibility_date = "2025-10-01"
+
+# 保留 workers.dev 上的地址（作为备用的健康检查入口）。
+# 真正给用户用的是下面 routes 里的自定义域名。
+workers_dev = true
+
+# 触发这个 Worker 的域名。
+# 注意：DNS 里那条 sb 的 A 记录（192.0.2.1 + 橙云）也要在 Cloudflare 后台存在，
+#       路由只负责"这个域名的请求交给哪个 Worker"。
+routes = [
+  { pattern = "sb.theopener.top/*", zone_name = "theopener.top" }
+]
+
+[vars]
+# Supabase 项目域名（不带 https://）。
+# ⚠️ 这不是密钥：它和 anon key 一样本来就出现在浏览器代码里，
+#    真正的权限控制由数据库 RLS 负责。
+#    换 Supabase 项目时改这一行 + 重新 deploy 即可。
+SUPABASE_HOST = "lvntlhgpalgbgrsloxyy.supabase.co"
+
+[observability]
+# 打开 Workers Logs，方便在后台看请求日志和错误
+enabled = true

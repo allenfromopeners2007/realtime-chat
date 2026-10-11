@@ -220,6 +220,31 @@ curl.exe -s "https://sb.你的域名/rest/v1/rooms?select=name" -H "apikey: 你�
 
 > Universal SSL 已覆盖根域名 + 一级子域名，所以证书不用额外配。
 
+### 后续改 Worker 用 wrangler（推荐）
+
+第一次：
+
+```powershell
+cd realtime-chat
+npm install --save-dev wrangler
+npx wrangler login          # 浏览器授权一次，之后一直有效
+```
+
+以后每次改完 `deploy/supabase-proxy-worker.js`：
+
+```powershell
+npm run worker:deploy       # 一条命令部署，不用再打开网页编辑器粘贴
+npm run worker:tail         # 实时看线上日志（排查转发/实时问题的利器）
+```
+
+- 部署配置在 **`deploy/wrangler.toml`**：里面写好了 Worker 名字、入口文件、
+  `SUPABASE_HOST` 变量、以及 `sb.你的域名/*` 这条路由 —— 所以 `wrangler deploy`
+  部署出来的状态和现在**完全一致**，不会把后台配好的东西弄丢。
+- 国内网络连不上 Cloudflare API 时，加代理再跑：
+  ```powershell
+  $env:NODE_USE_ENV_PROXY=1; $env:HTTPS_PROXY="http://127.0.0.1:7897"; npm run worker:deploy
+  ```
+
 **C. 给 Vercel 绑子域 `app.你的域名`**
 Vercel 项目 → **Settings → Domains** → 填 `app.你的域名` → 按提示在 Cloudflare 加一条 CNAME 指向
 `cname.vercel-dns.com`，**代理状态先关掉（灰云）**避免双重代理出问题

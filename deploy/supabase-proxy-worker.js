@@ -69,9 +69,17 @@ export default {
     }
 
     // 公开对象（消息里的图片等）允许匿名读取；
-    // 其余路径必须带 apikey（正常前端一定会带），挡掉顺手白嫖流量的人
+    // 其余路径必须带 apikey（正常前端一定会带），挡掉顺手白嫖流量的人。
+    //
+    // ⚠️ 注意 apikey 有两种携带方式：
+    //   - HTTP 请求：放在 `apikey` 请求头里（supabase-js 的行为）
+    //   - **实时推送的 WebSocket**：浏览器 `new WebSocket()` **不能自定义请求头**，
+    //     所以 supabase-js 只能把 apikey 拼在 URL 查询参数里（?apikey=...&vsn=1.0.0）。
+    //     只认请求头的话，实时连接会被 401 挡掉 → 前端一直显示「离线（15s 轮询）」。
     const isPublicObject = url.pathname.startsWith("/storage/v1/object/public/");
-    if (!isPublicObject && !request.headers.get("apikey")) {
+    const hasApiKey =
+      Boolean(request.headers.get("apikey")) || url.searchParams.has("apikey");
+    if (!isPublicObject && !hasApiKey) {
       return json({ error: "missing apikey" }, 401);
     }
 

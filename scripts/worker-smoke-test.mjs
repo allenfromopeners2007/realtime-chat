@@ -97,6 +97,15 @@ console.log("========== 3) apikey 校验 ==========");
   const { response } = await run("/storage/v1/object/public/chat-attachments/a.png");
   check("公开图片不带 apikey 也能过", response.status === 200, `HTTP ${response.status}`);
 }
+{
+  // ★ 浏览器 WebSocket 不能自定义请求头，supabase-js 把 apikey 放在查询参数里。
+  //   只认请求头的话会把实时连接挡掉（线上表现为一直「离线，15s 轮询」）。
+  const { response, captured: c } = await run("/realtime/v1/websocket?apikey=anon-key&vsn=1.0.0", {
+    headers: { Upgrade: "websocket", Connection: "Upgrade" },
+  });
+  check("apikey 放在查询参数里（WebSocket）也要放行，不能 401", response.status !== 401, `HTTP ${response.status}`);
+  check("确实转发到上游", c.length === 1);
+}
 
 console.log("");
 console.log("========== 4) CORS 预检（OPTIONS）★ 曾经线上翻车的地方 ==========");

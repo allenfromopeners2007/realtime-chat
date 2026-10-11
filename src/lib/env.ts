@@ -24,6 +24,20 @@ export const SUPABASE_URL = rawUrl.replace(/\/+$/, "");
  */
 export const SUPABASE_URL_SERVER = (process.env.SUPABASE_URL_SERVER || rawUrl).replace(/\/+$/, "");
 
+/**
+ * 【关键】登录 Cookie 的名字 —— 必须显式固定，不能让两个客户端各自推导。
+ *
+ * 原因：supabase-js 默认用 `sb-${URL主机名的第一段}-auth-token` 当存储键。
+ * 而我们线上故意让浏览器和服务端用**不同的 URL**：
+ *   浏览器 → https://sb.theopener.top   → 推导出 sb-**sb**-auth-token
+ *   服务端 → https://xxx.supabase.co    → 推导出 sb-**xxx**-auth-token
+ * 名字不一致 → 服务端读不到浏览器的登录态 →
+ *   /api/me 返回 null（管理员身份丢失、齿轮按钮消失）、/api/messages 全部 401。
+ *
+ * 所以（浏览器 / 服务端 / middleware）三处统一用这个名字。
+ */
+export const SUPABASE_COOKIE_NAME = "sb-realtime-chat-auth-token";
+
 /** Supabase anon key（公开密钥，真正的权限由 RLS 控制） */
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 

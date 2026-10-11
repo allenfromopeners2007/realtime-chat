@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL_SERVER } from "@/lib/env";
+import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_COOKIE_NAME, SUPABASE_URL_SERVER } from "@/lib/env";
 
 /**
  * 服务端 Supabase 客户端：从 Cookie 里恢复当前登录用户。
@@ -35,7 +35,11 @@ export async function getSupabaseServerClient(): Promise<SupabaseClient> {
   };
 
   // 服务端直连 Supabase（海外机器上不需要代理，也不该走浏览器那层反代）
-  return createServerClient(SUPABASE_URL_SERVER, SUPABASE_ANON_KEY, { cookies: cookieMethods });
+  // cookie 名必须和浏览器端一致，否则读不到登录态（详见 env.ts 注释）
+  return createServerClient(SUPABASE_URL_SERVER, SUPABASE_ANON_KEY, {
+    cookies: cookieMethods,
+    cookieOptions: { name: SUPABASE_COOKIE_NAME },
+  });
 }
 
 /** 拿当前登录用户；未登录或未配置环境变量时返回 null */

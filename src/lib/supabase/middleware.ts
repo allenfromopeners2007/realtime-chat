@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
 
-import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL_SERVER } from "@/lib/env";
+import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_COOKIE_NAME, SUPABASE_URL_SERVER } from "@/lib/env";
 
 /**
  * 刷新 Supabase 的登录 Cookie。
@@ -31,6 +31,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   const supabase = createServerClient(SUPABASE_URL_SERVER, SUPABASE_ANON_KEY, {
     cookies: cookieMethods,
+    // 必须和浏览器端用同一个 cookie 名（详见 env.ts 注释）
+    cookieOptions: { name: SUPABASE_COOKIE_NAME },
   });
 
   // 必须调用 getUser()：它会顺带触发 token 刷新并把新 Cookie 写进 response

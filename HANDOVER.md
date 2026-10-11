@@ -150,39 +150,98 @@ npm.cmd run dev:proxy         # 本地开发（带代理，国内必须用这个
 
 ### 语音通话连不上怎么办（配置 TURN 服务器）
 
-语音通话默认走 **P2P 直连**。国内大约 **10-30%** 的网络组合（很多 4G/5G、公司网络、
-以及两边都在运营商大内网的情况）因为 NAT 太复杂而**连不上** ✗
-界面会提示：**「连接失败：双方网络无法直连（需要配置 TURN 服务器）」**
+> ✅ **2026-10-11 已配置成功并实测通话打通** —— 下面记录完整流程和踩过的坑 ✓
 
-解决办法是配一个 **TURN 中继**（音频经它转发）。用 Cloudflare（你已有账号）：
+**背景**：语音通话默认走 **P2P 直连**。国内约 **10-30%** 的网络组合（很多 4G/5G、公司网络、
+双方都在运营商大内网）因为 NAT 太复杂而**连不上** ✗ 界面会提示「双方网络无法直连」✗
+解决办法是配 **TURN 中继**（音频经它转发，连通率接近 100% ✓）
 
-**① 在 Cloudflare 创建 TURN 应用**
+**Cloudflare TURN 免费额度：1,000 GB / 月** ✓ 超出后才 $0.05/GB
+你们的实际用量约 0.1-0.9 GB/月 → **实际花费永远是 $0** ✓
+⚠️ 但开通时页面会**要求绑支付方式**（卡或 PayPal）✗ 即使 Total Due 是 $0.00 ✓
+本次绕开了它 —— **直接用 API 创建 TURN key，没有绑卡** ✓
+
+**① 创建一个 Cloudflare API Token（用完就删）**
 
 ```
-Cloudflare 控制台 → 左侧 Build 分组里的「Realtime」→ TURN → 创建
-   ↓
-拿到两个值：Key ID  和  API Token（Token 只显示一次，立刻复制）
+Cloudflare → My Profile → API Tokens → Create Token → Create Custom Token
+   Token name: 随便，如 turn-key-create-once
+   Permissions:  Account  |  Cloudflare Calls  |  Edit      ← 注意是 "Cloudflare Calls"
+   Account Resources: Include → 只勾你自己那一个账号（不要选 All accounts）
+   TTL: 1 day                                                ← 短有效期更安全
 ```
 
-> 找不到入口就把左侧菜单截图发给 AI 助手，让它指位置 ✓
+**② 用 API 创建 TURN key（PowerShell 里跑，注意引号！）**
 
-**② 填到 Netlify（⚠️ 注意这两个变量名前面没有 NEXT_PUBLIC_）**
+```powershell
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
+$h=@{Authorization="Bearer <刚建的API Token>";"Content-Type"="application/json"}
+$r=Invoke-RestMethod -Method Post -Uri "https://api.cloudflare.com/client/v4/accounts/<AccountID>/calls/turn_keys" -Headers $h -Body '{"name":"theopener-chat"}'
+$r.result.uid; $r.result.key     # uid = Key ID(32位)，key = secret(64位)
+```
 
-Netlify → **Site configuration → Environment variables** → 添加：
+⚠️ **三个大坑（都踩过）**：
 
-| 变量名 | 值 |
-|---|---|
-| `CLOUDFLARE_TURN_KEY_ID` | 刚才的 Key ID |
-| `CLOUDFLARE_TURN_API_TOKEN` | 刚才的 API Token |
+| 坑 | 现象 | 正确做法 |
+|---|---|---|
+| **cmd 的引号写法** | `Request body too small` | **PowerShell 里 JSON body 用单引号** ✓ `-d '{"name":"x"}'`（`\"` 在 PowerShell 里不转义 ✗） |
+| **把 Account ID 当 Key ID** | Cloudflare 返回 **404** | Account ID 和 TURN Key ID **都是 32 位** ✗ 别搞混 ✓ 认字段名 `uid` ✓ |
+| **连续请求被限流** | 返回 **HTML 拦截页**（`Attention Required!`） | 等 5-10 分钟，或改用 `Invoke-RestMethod`（带正常 UA ✓） |
+
+**③ 拿到两个值**
+
+| 值 | 长度 | 填到 Netlify 的变量 |
+|---|---|---|
+| `uid` | **32 位** | `CLOUDFLARE_TURN_KEY_ID` |
+| `key`（控制台里叫 **secret**） | **64 位** | `CLOUDFLARE_TURN_API_TOKEN` |
+
+> ⚠️ **别填错**：以 `cfut_` 开头的是 Cloudflare **API Token**（约 40 位）✗ 不是要填的那个 ✓
+> 💡 控制台 Realtime → TURN 里能看到 `secret`，但**可能被截断成 `...`** ✗
+>    要么点旁边的复制按钮 ✓ 要么回到 API 返回里取完整值 ✓
+
+**④ 填到 Netlify（⚠️ 这两个变量名前面没有 NEXT_PUBLIC_）**
+
+Netlify → **Site configuration → Environment variables** →
+`Add a variable ▾` → **`Import from a .env file`** → 粘贴这两行：
+
+```
+CLOUDFLARE_TURN_KEY_ID=<32位的uid>
+CLOUDFLARE_TURN_API_TOKEN=<64位的secret>
+```
 
 > 🔐 **为什么不带 `NEXT_PUBLIC_`**：这两个是密钥，只能留在服务端 ✓
-> 浏览器要用的短期凭据由 `/api/turn` 这个接口现换现发（已限制必须登录才能调用 ✓）
+> 浏览器要用的**短期凭据**（1 小时过期）由 `/api/turn` 现换现发 ✓
+> 该接口**必须登录**才能调用 ✓（否则等于给全互联网提供免费中继 ✗）
 
-**③ 重新部署**
+**⑤ 重新部署 + 验证**
 
-Netlify → **Deploys → Trigger deploy → Deploy site**
+Netlify → **Deploys → Trigger deploy → Deploy project** → 等 Published ✓
+然后**在已登录的浏览器**里打开 `https://app.theopener.top/api/turn` ✓
 
-**④ 重新测通话** → 应该就能听见了 ✓
+| 返回 | 含义 |
+|---|---|
+| `{"iceServers":{"urls":["turn:turn.cloudflare.com:3478?transport=udp", ...]},"configured":true}` | ✅ **成功** 去测通话 ✓ |
+| `{"iceServers":null,"configured":false}` | ❌ 变量没读到 → 检查名字 + 重新部署 ✓ |
+| `Cloudflare 返回 404` | ❌ Key ID 填成了 Account ID ✓ |
+| `Cloudflare 返回 401/403` | ❌ 填成了 `cfut_` 开头的 API Token ✓ |
+
+**⑥ 收尾：删掉那个 Cloudflare API Token**
+
+`My Profile → API Tokens → 找到它 → Delete` ✓ 它只用一次 ✓
+（多余的 TURN key 也可以在 Realtime → TURN 里删掉，留一个就行 ✓）
+
+**⑦ 如果配了 TURN 还是连不上**
+
+界面提示会区分三种情况（2026-10 起 ✓）：
+
+| 提示 | 说明 |
+|---|---|
+| 「未配置 TURN 服务器」 | 变量没生效 ✓ |
+| 「**TURN 已配置，但没能拿到中继候选**」 | 网络连不上 TURN 服务器 ✗ 换方案（自建 coturn / 声网） |
+| 「已拿到 TURN 中继候选，但仍未连通」 | 中继通了但流量被拦 ✗ |
+
+按 **F12 → Console**，`[call]` 开头的日志会列出收到的 ICE 候选类型 ✓
+（`host` = 本机 / `srflx` = STUN 打的公网洞 / `relay` = TURN 中继 ✓ 有 relay 才说明 TURN 起作用 ✓）
 
 ---
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { Avatar } from "@/components/Avatar";
-import { CloseIcon, HashIcon, PlusIcon, SpinnerIcon, UsersIcon } from "@/components/icons";
+import { CloseIcon, HashIcon, PhoneIcon, PlusIcon, SpinnerIcon, UsersIcon } from "@/components/icons";
 import { cn } from "@/lib/format";
 import type { Member, Room, SessionUser } from "@/lib/types";
 
@@ -17,6 +17,10 @@ type Props = {
   onCreateRoom: (name: string) => Promise<boolean>;
   canCreateRoom: boolean;
   user: SessionUser | null;
+  /** 语音通话：点成员后面的 📞 呼叫 */
+  onCall?: (member: Member) => void;
+  /** 自己正在通话/呼叫中时，呼叫按钮禁用 */
+  callBusy?: boolean;
 };
 
 type Tab = "rooms" | "members";
@@ -32,6 +36,8 @@ export function DockPanel({
   onCreateRoom,
   canCreateRoom,
   user,
+  onCall,
+  callBusy = false,
 }: Props) {
   const [tab, setTab] = useState<Tab>("rooms");
   const [creating, setCreating] = useState(false);
@@ -131,20 +137,36 @@ export function DockPanel({
               <p className="px-2 py-6 text-center text-xs text-ink-500">还没有其他成员。</p>
             ) : (
               <ul className="space-y-1">
-                {members.map((member) => (
-                  <li
-                    key={member.id}
-                    className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-ink-200"
-                  >
-                    <Avatar name={member.username} url={member.avatarUrl} size={32} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm">{member.username}</span>
-                      <span className="block text-[11px] text-ink-500">
-                        {user?.id === member.id ? "这是你" : "聊天室成员"}
+                {members.map((member) => {
+                  const isMe = user?.id === member.id;
+                  return (
+                    <li
+                      key={member.id}
+                      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-ink-200"
+                    >
+                      <Avatar name={member.username} url={member.avatarUrl} size={32} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm">{member.username}</span>
+                        <span className="block text-[11px] text-ink-500">
+                          {isMe ? "这是你" : "聊天室成员"}
+                        </span>
                       </span>
-                    </span>
-                  </li>
-                ))}
+
+                      {!isMe && onCall && (
+                        <button
+                          type="button"
+                          onClick={() => onCall(member)}
+                          disabled={callBusy}
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300 transition hover:bg-emerald-500/25 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-500/15"
+                          aria-label={`呼叫 ${member.username}`}
+                          title={callBusy ? "你正在通话中" : `呼叫 ${member.username}`}
+                        >
+                          <PhoneIcon className="h-4 w-4" />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

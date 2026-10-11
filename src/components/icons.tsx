@@ -222,6 +222,25 @@ export function StopIcon({ className = "h-5 w-5", ...rest }: IconProps) {
   );
 }
 
+export function PhoneIcon({ className = "h-5 w-5", ...rest }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...rest}>
+      <path d="M6.6 3.5h2.2l1.5 3.7-1.9 1.3a11.5 11.5 0 0 0 5.1 5.1l1.3-1.9 3.7 1.5v2.2a2 2 0 0 1-2.2 2A15.5 15.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z" />
+    </svg>
+  );
+}
+
+export function PhoneOffIcon({ className = "h-5 w-5", ...rest }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...rest}>
+      <path d="M10.7 6.6 9.6 4.4H7.4a2 2 0 0 0-2 2.2c.2 1.6.7 3.1 1.4 4.5" />
+      <path d="M13.3 17.4a15.6 15.6 0 0 1-4.6-1.4" />
+      <path d="m14.9 12.4 1.3-1.9 3.7 1.5v2.2a2 2 0 0 1-2.2 2 15.4 15.4 0 0 1-3-.5" />
+      <path d="M3 3l18 18" />
+    </svg>
+  );
+}
+
 export function TrashIcon({ className = "h-5 w-5", ...rest }: IconProps) {
   return (
     <svg {...baseProps} className={className} {...rest}>

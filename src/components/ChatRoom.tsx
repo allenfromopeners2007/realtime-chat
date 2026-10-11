@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { CallOverlay } from "@/components/CallOverlay";
 import { Composer } from "@/components/Composer";
 import { DockPanel } from "@/components/DockPanel";
 import { ImageLightbox } from "@/components/ImageLightbox";
@@ -14,6 +15,8 @@ import { TopBar, type ConnectionState } from "@/components/TopBar";
 import { isSupabaseConfigured } from "@/lib/env";
 import { apiFetch, describeApiError } from "@/lib/http";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isBusy as isCallBusy } from "@/lib/call";
+import { useCall } from "@/lib/useCall";
 import {
   displayNameOf,
   mergeMessages,
@@ -98,6 +101,20 @@ export function ChatRoom({
   }, []);
 
   const dismissToast = useCallback(() => setToast(null), []);
+
+  // ---------- 实时语音通话（WebRTC + Supabase Realtime 信令）----------
+  const {
+    state: callState,
+    remoteStream: callRemoteStream,
+    startCall,
+    acceptCall,
+    rejectCall,
+    hangUp,
+    toggleMute,
+    turnConfigured,
+  } = useCall({ user, members, notify: showToast });
+
+  const callBusy = isCallBusy(callState.phase);
 
   // ---------- 登录状态：跟着 Supabase 的 auth 事件走 ----------
   useEffect(() => {
@@ -487,6 +504,8 @@ export function ChatRoom({
         onCreateRoom={handleCreateRoom}
         canCreateRoom={user?.isAdmin === true}
         user={user}
+        onCall={(member) => void startCall(member)}
+        callBusy={callBusy}
       />
 
       {settingsOpen && activeRoom && (
@@ -500,6 +519,17 @@ export function ChatRoom({
       )}
 
       {preview && <ImageLightbox attachment={preview} onClose={() => setPreview(null)} />}
+
+      <CallOverlay
+        state={callState}
+        remoteStream={callRemoteStream}
+        onAccept={() => void acceptCall()}
+        onReject={rejectCall}
+        onHangUp={hangUp}
+        onToggleMute={toggleMute}
+        turnConfigured={turnConfigured}
+      />
+
       <Toast state={toast} onDismiss={dismissToast} />
     </div>
   );

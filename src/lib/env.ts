@@ -38,6 +38,33 @@ export const SUPABASE_URL_SERVER = (process.env.SUPABASE_URL_SERVER || rawUrl).r
  */
 export const SUPABASE_COOKIE_NAME = "sb-realtime-chat-auth-token";
 
+/**
+ * 【可选】TURN 服务器 —— 实时语音通话的"中继"。
+ *
+ * 为什么需要：纯 P2P 的 WebRTC 遇到对称型 NAT（很多 4G/5G、公司网络）连不上，
+ * 大约 10-30% 的通话会失败。配了 TURN 之后音频由它中转，连通率接近 100%。
+ *
+ * 不配也能用（走公共 STUN），只是部分网络组合会提示"双方网络无法直连"。
+ *
+ * 推荐 Cloudflare TURN（你已经有 Cloudflare 账号）：
+ *   https://developers.cloudflare.com/realtime/turn/
+ * 拿到信息后填到部署平台的环境变量：
+ *   NEXT_PUBLIC_TURN_URL=turn:turn.cloudflare.com:3478
+ *   NEXT_PUBLIC_TURN_USERNAME=...
+ *   NEXT_PUBLIC_TURN_CREDENTIAL=...
+ *
+ * ⚠️ 因为是 NEXT_PUBLIC_ 前缀（浏览器要用），会出现在前端代码里 ——
+ *    所以请用**短期凭据**，不要用长期密钥。
+ */
+export const TURN_CONFIG =
+  (process.env.NEXT_PUBLIC_TURN_URL ?? "").trim() === ""
+    ? null
+    : {
+        url: (process.env.NEXT_PUBLIC_TURN_URL ?? "").trim(),
+        username: process.env.NEXT_PUBLIC_TURN_USERNAME ?? "",
+        credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL ?? "",
+      };
+
 /** Supabase anon key（公开密钥，真正的权限由 RLS 控制） */
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 

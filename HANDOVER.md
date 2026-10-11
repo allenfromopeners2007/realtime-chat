@@ -27,6 +27,8 @@
 • **发语音**：点输入框左边的 🎤 录音（最长 2 分钟）→ 录完点「完成」→ 发送后别人点播放器就能听
   ⚠️ 第一次点会弹「是否允许使用麦克风」，要点「允许」；不小心点了拒绝的话，
      点浏览器地址栏左边的小图标把麦克风改成允许即可
+• **语音通话**：点右下角紫色按钮 → 「联系人」页签 → 点某个人的 📞 → 对方接听就能说话
+  ⚠️ 同样需要麦克风权限；通话中顶部会显示时长，可以静音或挂断
 • 切换群组：点右上角群组名，或右下角紫色按钮
 • 搜聊天记录：顶部搜索框
 • 删自己的消息：鼠标移到消息上 → 右上角垃圾桶图标
@@ -131,11 +133,36 @@ git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 pus
 ```powershell
 npm.cmd run typecheck         # TypeScript 类型检查
 npm.cmd run test:worker       # Worker 逻辑测试（35 项）
-npm.cmd run test:voice        # 语音模块纯函数测试（34 项）
+npm.cmd run test:voice        # 语音消息纯函数测试（34 项）
+npm.cmd run test:call         # 实时语音通话：信令校验等（52 项）
 npm.cmd run audit:security    # 越权攻击测试（15 项，应全部拦住）
 npm.cmd run dev:proxy         # 本地开发（带代理，国内必须用这个）
 ```
 
-> ⚠️ **测语音功能必须用 Edge / Chrome 打开线上地址** ——
-> DeepSeek 内置浏览器会拒绝所有网页权限（包括麦克风），点 🎤 会直接报"没有麦克风权限"。
-> 你同学用的正常浏览器都能录 ✓
+> ⚠️ **测语音消息 / 语音通话必须用 Edge / Chrome 打开线上地址** ——
+> DeepSeek 内置浏览器会拒绝所有网页权限（包括麦克风），点 🎤 或 📞 会直接报"没有麦克风权限"。
+> 你同学用的正常浏览器都能用 ✓
+>
+> 📞 **测语音通话还需要两个账号 + 两个浏览器**（或一台电脑 + 一部手机）：
+> 在 Supabase → **Authentication → Users → Add user** 建一个测试账号（勾 **Auto Confirm User**），
+> 然后用 Edge 登录你自己的号、Chrome 登录测试号，互相呼叫 ✓
+> 同一台电脑上用两个浏览器时建议**戴耳机**（否则会有回音 ✓）
+
+### 语音通话连不上怎么办（TURN 服务器）
+
+语音通话默认走 **P2P 直连**。国内大约 **10-30%** 的网络组合（很多 4G/5G、公司网络）
+因为 NAT 太复杂而**连不上** ✗ 界面会提示「双方网络无法直连（需要配置 TURN 服务器）」。
+
+解决办法是配一个 **TURN 中继**（音频经它转发）。推荐 Cloudflare（你已有账号）：
+
+1. 打开 https://developers.cloudflare.com/realtime/turn/ 按文档创建一个 TURN 应用
+2. 拿到三段信息后，填到 **Netlify → Site configuration → Environment variables**：
+   ```
+   NEXT_PUBLIC_TURN_URL=turn:turn.cloudflare.com:3478
+   NEXT_PUBLIC_TURN_USERNAME=...
+   NEXT_PUBLIC_TURN_CREDENTIAL=...
+   ```
+3. **Trigger deploy** 重新部署（`NEXT_PUBLIC_*` 是构建时打进前端的，必须重新部署 ✓）
+
+配好后通话会自动优先走 TURN ✓ 不用改代码 ✓
+⚠️ 因为这三个变量会出现在前端代码里，所以**用短期凭据**，别填长期密钥 ✓

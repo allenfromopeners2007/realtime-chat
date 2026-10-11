@@ -144,6 +144,55 @@ verdict("匿名调用 admin_list_rooms()", isBlocked(await call("/rest/v1/rpc/ad
 verdict("匿名直接读 auth.users 表（邮箱泄露）", isBlocked(await call("/rest/v1/users?select=email&limit=1")));
 
 console.log("");
+console.log("========== 4.5) 网站自己的管理接口（匿名调用必须被拦）==========");
+{
+  // 这些接口在网站上（不是 Supabase），所以要单独请求
+  const APP_URL = process.env.APP_URL ?? "https://app.theopener.top";
+
+  async function callApp(path, init = {}) {
+    try {
+      const response = await fetch(`${APP_URL}${path}`, {
+        ...init,
+        headers: { accept: "application/json", ...(init.headers ?? {}) },
+        redirect: "manual",
+      });
+      const text = await response.text();
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // 不是 JSON（比如 404 的 HTML 页）就留 null
+      }
+      return { status: response.status, json, text };
+    } catch (error) {
+      return { status: 0, json: null, text: String(error?.cause?.code ?? error?.message ?? error) };
+    }
+  }
+
+  const invite = await callApp("/api/admin/invite", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "attacker@example.com" }),
+  });
+  // 401 = 要求登录（正常）；404 = 这个版本还没部署（也拦住了，至少没放行）
+  verdict(
+    "匿名调用 /api/admin/invite 发邀请（会用 service_role 发邮件）",
+    invite.status === 401 || invite.status === 404,
+    `HTTP ${invite.status}`,
+  );
+
+  // 关键：这个接口用了 service_role，响应里绝不能出现任何密钥片段
+  const leaked = /service_role|sb_secret_|SUPABASE_SERVICE|eyJhbGciOi/i.test(invite.text);
+  verdict("邀请接口把 service_role 密钥回显出来", !leaked, leaked ? "⚠️ 泄露了" : "没有 ✓");
+
+  const users = await callApp("/api/admin/users");
+  verdict("匿名调用 /api/admin/users", users.status === 401 || users.status === 404, `HTTP ${users.status}`);
+
+  const turn = await callApp("/api/turn");
+  verdict("匿名领取 TURN 凭据（会吃我们的免费流量）", turn.status === 401 || turn.status === 404, `HTTP ${turn.status}`);
+}
+
+console.log("");
 console.log("========== 5) 辅助函数（设计上允许匿名调用）==========");
 {
   const r = await call("/rest/v1/rpc/is_admin", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

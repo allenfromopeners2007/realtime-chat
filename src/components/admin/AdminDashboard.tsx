@@ -4,17 +4,19 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { FilesTab } from "@/components/admin/FilesTab";
+import { InviteTab } from "@/components/admin/InviteTab";
 import { MessagesTab } from "@/components/admin/MessagesTab";
 import { RoomsTab } from "@/components/admin/RoomsTab";
 import { UsersTab } from "@/components/admin/UsersTab";
 import { Toast, type ToastState } from "@/components/Toast";
-import { ChatIcon, FileIcon, HashIcon, SearchIcon, UsersIcon } from "@/components/icons";
+import { ChatIcon, FileIcon, HashIcon, PlusIcon, SearchIcon, UsersIcon } from "@/components/icons";
 import { cn } from "@/lib/format";
 
-type Tab = "users" | "rooms" | "messages" | "files";
+type Tab = "users" | "invite" | "rooms" | "messages" | "files";
 
 const TABS: Array<{ id: Tab; label: string; hint: string; Icon: typeof UsersIcon }> = [
   { id: "users", label: "用户", hint: "角色 / 禁言 / 改名", Icon: UsersIcon },
+  { id: "invite", label: "邀请", hint: "一键发邀请邮件", Icon: PlusIcon },
   { id: "rooms", label: "群组", hint: "新建 / 改名 / 删除", Icon: HashIcon },
   { id: "messages", label: "消息", hint: "检索 / 删除", Icon: SearchIcon },
   { id: "files", label: "附件", hint: "浏览 Storage / 清理", Icon: FileIcon },
@@ -77,6 +79,7 @@ export function AdminDashboard({ admin }: { admin: { id: string; name: string } 
 
       <main className="mx-auto w-full max-w-6xl px-4 py-5">
         {tab === "users" && <UsersTab adminId={admin.id} notify={notify} />}
+        {tab === "invite" && <InviteTab notify={notify} />}
         {tab === "rooms" && <RoomsTab notify={notify} />}
         {tab === "messages" && <MessagesTab notify={notify} />}
         {tab === "files" && <FilesTab notify={notify} />}

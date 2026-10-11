@@ -87,7 +87,7 @@ Please note:
 
 | 要做的事 | 在哪做 |
 |---|---|
-| ⭐ **邀请同学加入**（现在唯一的加人方式） | Supabase → **Authentication → Users** → 右上 **Add user ▾ → Invite user** → 填他的邮箱 → **Send invite** |
+| ⭐ **邀请同学加入**（网站的 `/admin` → **邀请** 页签） | 输入他的邮箱 → **发送邀请** ✓（他会收到邀请邮件，点链接设密码）<br>备用：Supabase → **Authentication → Users** → **Add user ▾ → Invite user** |
 | **看谁加入了 / 有没有确认邮箱** | Supabase → **Authentication → Users** |
 | **给某人手动确认邮箱**（他收不到邮件时） | Users → 那行右侧 `⋮` → **Confirm email** |
 | **删账号** | Users → `⋮` → **Delete user** |
@@ -98,9 +98,16 @@ Please note:
 > ⭐ **关于邀请制**（2026-10-11 起生效）：
 > Supabase 里 **「Allow new users to sign up」已关闭** ✓
 > → 陌生人即使拿到网址也**注册不了** ✗（实测注册接口返回 `signup_disabled` ✓）
-> → 加人只能靠你在后台发邀请 ✓ 这正是"私人工具"和"公开服务"的分界线 ✓
-> 💡 **建议分批邀请**（一次几个 ✓）避免触发邮件发送频率限制 ✓
-> 💡 页面上「注册」页签还在 ✓ 但会显示"本聊天室是邀请制"的提示 ✓ 不会让人一脸懵 ✓
+> → 加人靠**网站的 `/admin` → 邀请页签** ✓（或 Supabase 后台的 Invite user ✓）
+> → 这正是"私人工具"和"公开服务"的分界线 ✓
+> 💡 **建议分批邀请**（一次几个 ✓）避免触发邮件发送频率限制（每分钟最多 5 个 ✓）
+> 💡 页面上「注册」页签还在 ✓ 但会显示邀请制提示 ✓ 不会让人一脸懵 ✓
+>
+> 🔑 **邀请功能依赖一个环境变量**（没配的话 /admin 的邀请会提示去配置）：
+> `SUPABASE_SERVICE_ROLE_KEY` = Supabase → **Settings → API Keys** 里的 `service_role` / `sb_secret_...`
+> ⚠️ **绝对不要加 `NEXT_PUBLIC_` 前缀** ✗（加了就会被打进浏览器代码 ✗）
+> 它的权限是"绕过所有 RLS" ✓ 所以只在服务端、只被 `/api/admin/invite` 使用 ✓
+> 安全自检里有专门两项验证：匿名调用会被拒 ✓ 响应里不会回显密钥 ✓（`npm run audit:security`）
 
 ## 聊天内容管理
 
@@ -169,7 +176,7 @@ git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 pus
 
 | 红线 | 原因 |
 |---|---|
-| **永远不要把 `service_role` / `sb_secret_...` 放进代码或环境变量** | 它能绕过所有 RLS，等于全库无防护 |
+| **绝不能让 `service_role` / `sb_secret_...` 进入浏览器或前端代码** ⚠️ | 它能绕过所有 RLS，等于全库钥匙。**唯一例外**：`SUPABASE_SERVICE_ROLE_KEY` 放在服务端环境变量里（**不加 `NEXT_PUBLIC_` 前缀**），且只在 `/api/admin/invite` 这一个接口里使用 —— 这是 Supabase 官方发邀请的标准做法 ✓ 换别的密钥时请对照这条规则 ✓ |
 | **不要重跑 `supabase/schema.sql`** | 会覆盖加固过的策略（自我提权漏洞会回来）。要重跑就按顺序全跑一遍：`schema → admin-migration → rooms-migration → security-hardening` |
 | 不要渲染用户提供的 HTML/Markdown | 现在消息是纯文本，链接只认 http(s)；一旦加富文本渲染，XSS 就会变成真风险 |
 | 别往聊天里传证件、合同等敏感文件 | 附件 bucket 是公开可读的（图片要在 `<img>` 里显示） |

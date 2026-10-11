@@ -13,6 +13,7 @@ import {
   createCallId,
   describeCallEnd,
   describeCallError,
+  describeConnectFailure,
   isBusy,
   parseSignalMessage,
   type CallEndReason,
@@ -80,6 +81,10 @@ export function useCall({ user, members, notify }: Options) {
   const localStreamRef = useRef<MediaStream | null>(null);
   const inboxRef = useRef<RealtimeChannel | null>(null);
   const outboxesRef = useRef(new Map<string, { channel: RealtimeChannel; ready: Promise<void> }>());
+  /** 本次通话收集到的 ICE 候选类型（host / srflx / relay），用于失败时诊断 */
+  const candidateTypesRef = useRef<Set<string>>(new Set());
+  /** turnAvailable 的 ref 版本：信令回调里要读到最新值 */
+  const turnAvailableRef = useRef(TURN_CONFIG !== null);
   const ringTimerRef = useRef<number | null>(null);
   const connectTimerRef = useRef<number | null>(null);
   const disconnectTimerRef = useRef<number | null>(null);
@@ -121,6 +126,18 @@ export function useCall({ user, members, notify }: Options) {
     }
     pcRef.current = null;
     setRemoteStream(null);
+  }, []);
+
+  /** 连接失败时把关键信息打到控制台：用户截图给我们就能定位问题 */
+  const logConnectFailure = useCallback((pc: RTCPeerConnection) => {
+    console.error("[call] 连接失败诊断", {
+      connectionState: pc.connectionState,
+      iceConnectionState: pc.iceConnectionState,
+      iceGatheringState: pc.iceGatheringState,
+      turnAvailable: turnAvailableRef.current,
+      candidateTypes: [...candidateTypesRef.current],
+      sawRelayCandidate: candidateTypesRef.current.has("relay"),
+    });
   }, []);
 
   /** 结束通话并回到空闲（message 不为空时弹一条提示） */
@@ -222,7 +239,10 @@ export function useCall({ user, members, notify }: Options) {
       if (!data.iceServers || typeof data.iceServers !== "object") return fallback;
 
       const servers = buildIceServers(data.iceServers as Parameters<typeof buildIceServers>[0]);
-      if (servers.length > 1) setTurnAvailable(true);
+      if (servers.length > 1) {
+        turnAvailableRef.current = true;
+        setTurnAvailable(true);
+      }
       return servers;
     } catch (error) {
       console.warn("[call] 获取 TURN 凭据失败，退回 STUN", error);
@@ -236,6 +256,7 @@ export function useCall({ user, members, notify }: Options) {
       if (pcRef.current) return pcRef.current;
 
       const myId = user?.id ?? "";
+      candidateTypesRef.current = new Set();
       const iceServers = await resolveIceServers();
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
@@ -245,6 +266,13 @@ export function useCall({ user, members, notify }: Options) {
 
       pc.onicecandidate = (event) => {
         if (!event.candidate) return;
+        // 诊断用：候选类型能直接告诉我们 P2P 还是中继、以及是否被网络限制
+        //   host  = 本机地址
+        //   srflx = 通过 STUN 拿到的公网地址（P2P 直连的前提）
+        //   relay = 通过 TURN 拿到的中继地址（前两者都不通时的兜底）
+        const candidateType = event.candidate.type ?? "unknown";
+        candidateTypesRef.current.add(candidateType);
+        console.log(`[call] ICE 候选：${candidateType}`, event.candidate.candidate.slice(0, 80));
         void sendSignal(peerId, {
           type: "ice",
           callId,
@@ -275,13 +303,17 @@ export function useCall({ user, members, notify }: Options) {
             update({ ...current, phase: "active", detail: "" });
           }
         } else if (connectionState === "failed") {
-          finish("failed");
+          logConnectFailure(pc);
+          finish(null, describeConnectFailure(turnAvailableRef.current, candidateTypesRef.current.has("relay")));
         } else if (connectionState === "disconnected") {
           // 短暂断开（切网、抖动）有可能自己恢复，给一个宽限期
           if (disconnectTimerRef.current === null) {
             disconnectTimerRef.current = window.setTimeout(() => {
               disconnectTimerRef.current = null;
-              if (pcRef.current?.connectionState === "disconnected") finish("failed");
+              if (pcRef.current?.connectionState === "disconnected") {
+                logConnectFailure(pc);
+                finish(null, describeConnectFailure(turnAvailableRef.current, candidateTypesRef.current.has("relay")));
+              }
             }, DISCONNECT_GRACE_MS);
           }
         }
@@ -547,7 +579,10 @@ export function useCall({ user, members, notify }: Options) {
 
     // 建立连接的兜底超时（多半是网络需要 TURN）
     connectTimerRef.current = window.setTimeout(() => {
-      if (stateRef.current.phase !== "active") finish("failed");
+      if (stateRef.current.phase !== "active") {
+        if (pcRef.current) logConnectFailure(pcRef.current);
+        finish(null, describeConnectFailure(turnAvailableRef.current, candidateTypesRef.current.has("relay")));
+      }
     }, CONNECT_TIMEOUT_MS);
   }, [finish, openMic, sendSignal, update, user?.id]);
 
@@ -592,7 +627,10 @@ export function useCall({ user, members, notify }: Options) {
     if (state.phase !== "connecting") return;
     if (connectTimerRef.current !== null) return;
     connectTimerRef.current = window.setTimeout(() => {
-      if (stateRef.current.phase !== "active") finish("failed");
+      if (stateRef.current.phase !== "active") {
+        if (pcRef.current) logConnectFailure(pcRef.current);
+        finish(null, describeConnectFailure(turnAvailableRef.current, candidateTypesRef.current.has("relay")));
+      }
     }, CONNECT_TIMEOUT_MS);
   }, [finish, state.phase]);
 

@@ -28,6 +28,7 @@ const {
   buildIceServers,
   describeCallEnd,
   describeCallError,
+  describeConnectFailure,
   isBusy,
 } = call;
 
@@ -151,10 +152,33 @@ for (const [reason, keyword] of [
   ["rejected", "拒绝"],
   ["no-answer", "没有接听"],
   ["busy", "正在通话中"],
-  ["failed", "TURN"],
+  ["failed", "无法直连"],
 ]) {
   const text = describeCallEnd(reason, "小张");
   check(`${reason} → 含「${keyword}」`, text.includes(keyword), text);
+}
+
+console.log("");
+console.log("========== 5.5) 连接失败必须能区分三种情况 ==========");
+{
+  const noTurn = describeConnectFailure(false, false);
+  check("未配 TURN → 提示去配置", noTurn.includes("未配置 TURN"), noTurn);
+
+  const turnButNoRelay = describeConnectFailure(true, false);
+  check(
+    "配了 TURN 但没有 relay 候选 → 提示凭据/阻断",
+    turnButNoRelay.includes("没能拿到中继候选"),
+    turnButNoRelay,
+  );
+
+  const hasRelay = describeConnectFailure(true, true);
+  check(
+    "有 relay 候选却仍失败 → 提示中继被拦",
+    hasRelay.includes("拦截了中继流量"),
+    hasRelay,
+  );
+
+  check("三种文案互不相同", new Set([noTurn, turnButNoRelay, hasRelay]).size === 3);
 }
 
 console.log("");

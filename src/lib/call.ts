@@ -173,7 +173,7 @@ export function describeCallEnd(reason: CallEndReason, peerName: string): string
     case "busy":
       return `${peerName} 正在通话中`;
     case "failed":
-      return "连接失败：双方网络无法直连（需要配置 TURN 服务器）";
+      return "连接失败：双方网络无法直连";
     case "timeout":
       return "通话时间过长，已自动挂断";
     case "local":
@@ -181,6 +181,22 @@ export function describeCallEnd(reason: CallEndReason, peerName: string): string
     default:
       return "通话已结束";
   }
+}
+
+/**
+ * 把"连接失败"拆成三种可区分的原因。
+ *
+ * 为什么需要：以前无论哪种情况都显示同一句"需要配置 TURN 服务器"，
+ * 导致已经配了 TURN 却仍然失败时，用户和开发者都看不出卡在哪一步 ✗
+ */
+export function describeConnectFailure(turnAvailable: boolean, sawRelayCandidate: boolean): string {
+  if (!turnAvailable) {
+    return "连接失败：双方网络无法直连（当前未配置 TURN 服务器，可在部署平台加 CLOUDFLARE_TURN_KEY_ID / API_TOKEN）";
+  }
+  if (!sawRelayCandidate) {
+    return "连接失败：TURN 已配置，但没能拿到中继候选 —— 多半是凭据失效，或 TURN 服务器被当前网络阻断";
+  }
+  return "连接失败：已经拿到 TURN 中继候选，但仍未连通 —— 可能是网络策略拦截了中继流量";
 }
 
 /** 把 getUserMedia / RTCPeerConnection 抛出的异常翻译成人话 */

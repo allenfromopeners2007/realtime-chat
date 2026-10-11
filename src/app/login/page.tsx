@@ -23,7 +23,7 @@ function friendlyAuthError(message: string): string {
     [/already registered|already been registered|user already exists/i, "这个邮箱已经注册过了，切到「登录」直接进就行"],
     [/password should be at least/i, "密码至少要 6 位"],
     [/over_email_send_rate_limit|email rate limit|too many requests|rate limit/i, "操作太频繁了，请等几分钟再试（邮件服务有频率限制）"],
-    [/signups not allowed|signup.*disabled/i, "本站已关闭自助注册，请联系管理员为你开通账号"],
+    [/signups not allowed|signup.*disabled/i, "本聊天室是邀请制（已关闭自助注册）：请找管理员给你发邀请邮件"],
     [/error sending confirmation email|smtp/i, "验证邮件发送失败：管理员需要配置邮件服务（SMTP）"],
     [/failed to fetch|network ?error/i, "网络请求失败：请检查网络后重试"],
   ];
@@ -139,13 +139,20 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-3">
             {mode === "signup" && (
-              <input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="昵称（可留空，默认用邮箱前缀）"
-                maxLength={24}
-                className={inputClass}
-              />
+              <>
+                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+                  ⚠️ 本聊天室是<strong className="font-semibold">邀请制</strong>：自助注册已关闭。
+                  请先找管理员要一个<strong className="font-semibold">邀请邮件</strong>，
+                  点邮件里的链接设置好密码，再回到这里登录。
+                </p>
+                <input
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="昵称（可留空，默认用邮箱前缀）"
+                  maxLength={24}
+                  className={inputClass}
+                />
+              </>
             )}
 
             <input

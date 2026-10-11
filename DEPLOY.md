@@ -183,8 +183,42 @@ git push -u origin main
 控制台 → **Add a site** → 输入域名 → 选 **Free** 计划 → 按提示把域名的 NS 改成 Cloudflare 给的两个地址
 
 **B. 给 Worker 绑子域 `sb.你的域名`**
-Worker → **Settings** → **Domains & Routes** → **Add** → **Custom Domain** → 填 `sb.你的域名` → 保存
-（Cloudflare 会自动加 DNS 记录 + 证书）
+
+> ⚠️ **2026-10 实测**：新版 Cloudflare 界面里，Custom Domain 入口从
+> `Worker → Settings → Domains & Routes` 挪到了 Worker 页面**顶部的一级标签 `Domains`**。
+> 而且那个「Connect domain」对话框可能报 **`No zones match sb.你的域名`**（zone 列表缓存问题）。
+> 所以推荐直接用下面这条**一定能走通**的路：
+
+**B-1. 先加一条 DNS 记录**（域名 → 左侧 `DNS` → `Add record`）
+
+| 字段 | 值 |
+|---|---|
+| Type | `A` |
+| Name | `sb`（只填 sb，不要填完整域名） |
+| IPv4 address | `192.0.2.1` ← Cloudflare 官方指定的占位 IP，请求会被 Worker 拦下，不会真的发到这里 |
+| Proxy status | **Proxied（橙云）** ← 必须是橙色 |
+
+**B-2. 再加一条 Worker 路由**（域名 → 左侧 `Workers Routes` → `Add route`）
+
+| 字段 | 值 |
+|---|---|
+| Route | `sb.你的域名/*` |
+| Worker | `supabase-proxy` |
+| Failure mode | `Fail closed`（默认） |
+
+**B-3. 验证（关键，且要直连测）**
+
+```powershell
+# curl.exe 不读 Windows 系统代理 = 真实模拟"没开代理的同学"
+curl.exe -s https://sb.你的域名/__health
+# 期望：{"ok":true,"upstream":"xxx.supabase.co","hint":"配置正常"}
+
+# 端到端：通过 Worker 真实读一次数据库
+curl.exe -s "https://sb.你的域名/rest/v1/rooms?select=name" -H "apikey: 你的_anon_key"
+# 期望：返回群组的 JSON 数组
+```
+
+> Universal SSL 已覆盖根域名 + 一级子域名，所以证书不用额外配。
 
 **C. 给 Vercel 绑子域 `app.你的域名`**
 Vercel 项目 → **Settings → Domains** → 填 `app.你的域名` → 按提示在 Cloudflare 加一条 CNAME 指向

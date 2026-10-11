@@ -10,6 +10,29 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup";
 
+/**
+ * 把 Supabase 返回的英文错误翻译成人话。
+ *
+ * 为什么需要：打开「邮箱验证」（Confirm email）之后，
+ * 「Email not confirmed」这类提示会经常出现，直接抛给同学看不懂。
+ */
+function friendlyAuthError(message: string): string {
+  const rules: Array<[RegExp, string]> = [
+    [/email not confirmed/i, "邮箱还没验证：请先打开邮箱点确认链接，再回来登录"],
+    [/invalid login credentials/i, "邮箱或密码不对，请检查后重试"],
+    [/already registered|already been registered|user already exists/i, "这个邮箱已经注册过了，切到「登录」直接进就行"],
+    [/password should be at least/i, "密码至少要 6 位"],
+    [/over_email_send_rate_limit|email rate limit|too many requests|rate limit/i, "操作太频繁了，请等几分钟再试（邮件服务有频率限制）"],
+    [/signups not allowed|signup.*disabled/i, "本站已关闭自助注册，请联系管理员为你开通账号"],
+    [/error sending confirmation email|smtp/i, "验证邮件发送失败：管理员需要配置邮件服务（SMTP）"],
+    [/failed to fetch|network ?error/i, "网络请求失败：请检查网络后重试"],
+  ];
+  for (const [pattern, text] of rules) {
+    if (pattern.test(message)) return text;
+  }
+  return message === "" ? "登录失败，详情见控制台" : message;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
@@ -68,7 +91,7 @@ export default function LoginPage() {
       console.error("[login] 认证失败", error);
       setFeedback({
         kind: "error",
-        text: error instanceof Error ? error.message : "登录失败，详情见控制台",
+        text: friendlyAuthError(error instanceof Error ? error.message : ""),
       });
     } finally {
       setPending(false);

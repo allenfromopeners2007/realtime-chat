@@ -4,7 +4,8 @@ import { useState, type ReactNode } from "react";
 
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/admin/ui";
-import { CheckIcon, DownloadIcon, FileIcon, MicIcon, TrashIcon } from "@/components/icons";
+import { CheckIcon, DownloadIcon, FileIcon, MicIcon, SpinnerIcon, TrashIcon } from "@/components/icons";
+import { safeDownloadName, isPreviewable } from "@/lib/download";
 import { cn, formatBytes, formatTime, linkifyParts } from "@/lib/format";
 import type { Attachment, Message } from "@/lib/types";
 import { formatDuration } from "@/lib/voice";
@@ -120,22 +121,97 @@ function AttachmentView({
   }
 
   return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noreferrer noopener"
-      download={attachment.name}
-      className="mt-1.5 flex max-w-sm items-center gap-3 rounded-2xl border border-ink-800 bg-ink-900 px-3 py-2.5 transition hover:border-brand-500/50"
-    >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-brand-300">
-        <FileIcon className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm text-ink-100">{attachment.name}</span>
-        <span className="block text-xs text-ink-400">{formatBytes(attachment.size)}</span>
-      </span>
-      <DownloadIcon className="h-4 w-4 shrink-0 text-ink-400" />
-    </a>
+    <FileAttachment attachment={attachment} />
+  );
+}
+
+/**
+ * 文件类附件：点击**直接下载**，不跳转、不开新标签页。
+ *
+ * 为什么不用 `<a target="_blank" download>`：
+ *   浏览器会**先打开一个空白标签页**再去下载 ✗（用户反馈的"中转的空白页"就是它 ✓）
+ *   而且跨域链接上的 `download` 属性会被忽略 ✗
+ *
+ * 现在的做法：fetch 成 Blob → 生成同源的 blob: 链接 → 触发下载 ✓
+ *   完全不发生页面跳转 ✓ 空白页不可能出现 ✓ 还能保留原始文件名（含中文 ✓）
+ */
+function FileAttachment({ attachment }: { attachment: Attachment }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = safeDownloadName(attachment.name, "附件");
+      link.rel = "noreferrer noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      // 稍后再释放，避免刚触发下载就被回收
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (caught) {
+      console.error("[attachment] 下载失败：", caught);
+      setError("下载失败，请重试");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function preview() {
+    // 预览同样用 blob，避免跨域直接打开时又变成下载 / 空白页
+    window.open(attachment.url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="mt-1.5 max-w-sm">
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={busy}
+        className="flex w-full items-center gap-3 rounded-2xl border border-ink-800 bg-ink-900 px-3 py-2.5 text-left transition hover:border-brand-500/50 disabled:opacity-70"
+        title="点击下载"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-brand-300">
+          <FileIcon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm text-ink-100">{attachment.name}</span>
+          <span className="block text-xs text-ink-400">
+            {busy ? "正在下载…" : formatBytes(attachment.size)}
+          </span>
+        </span>
+        {busy ? (
+          <SpinnerIcon className="h-4 w-4 shrink-0 animate-spin text-ink-400" />
+        ) : (
+          <DownloadIcon className="h-4 w-4 shrink-0 text-ink-400" />
+        )}
+      </button>
+
+      <div className="mt-1 flex items-center gap-3 px-1">
+        {isPreviewable(attachment.name, attachment.mime) && (
+          <button
+            type="button"
+            onClick={preview}
+            className="text-[11px] text-ink-500 underline-offset-2 transition hover:text-ink-200 hover:underline"
+          >
+            在新标签页预览
+          </button>
+        )}
+        {error && <span className="text-[11px] text-rose-300">{error}</span>}
+      </div>
+    </div>
   );
 }
 

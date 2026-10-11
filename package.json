@@ -13,7 +13,8 @@
     "test:voice": "node scripts/voice-test.mjs",
     "worker:deploy": "wrangler deploy --config deploy/wrangler.toml",
     "worker:tail": "wrangler tail --config deploy/wrangler.toml",
-    "test:call": "node scripts/call-test.mjs"
+    "test:call": "node scripts/call-test.mjs",
+    "test:download": "node scripts/download-test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

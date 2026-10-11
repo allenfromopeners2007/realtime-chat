@@ -142,6 +142,7 @@ export function ChatRoom({
           name: displayNameOf(nextUser),
           avatarUrl: typeof avatar === "string" ? avatar : null,
           isAdmin: previous?.id === nextUser.id ? previous.isAdmin : undefined,
+          isOwner: previous?.id === nextUser.id ? previous.isOwner : undefined,
         }));
 
         // 再从服务端拿一次权威信息（角色可能刚被改过）

@@ -193,7 +193,7 @@ export async function DELETE(request: NextRequest) {
       if (profileError) {
         console.warn("[api/messages] 读取角色失败：", profileError.message);
       }
-      allowed = profile?.role === "admin";
+      allowed = isAdminRole(profile?.role);
     }
 
     if (!allowed) return jsonError("只能删除自己发的消息", 403);

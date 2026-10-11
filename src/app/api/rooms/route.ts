@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     if (profileError) {
       console.warn("[api/rooms] 读取角色失败：", profileError.message);
     }
-    if (profile?.role !== "admin") {
+    if (!isAdminRole(profile?.role)) {
       return jsonError("只有管理员可以创建群组", 403);
     }
 

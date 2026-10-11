@@ -42,7 +42,8 @@ export async function GET() {
       email: user.email ?? null,
       name: (profile?.username as string | undefined) ?? displayNameOf(user),
       avatarUrl: typeof avatar === "string" ? avatar : null,
-      isAdmin: profile?.role === "admin",
+      isAdmin: isAdminRole(profile?.role),
+      isOwner: isOwnerRole(profile?.role),
     };
 
     return jsonOk({ user: sessionUser, configured: true });

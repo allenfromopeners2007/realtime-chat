@@ -89,7 +89,7 @@ export default function LoginPage() {
             <h1 className="text-lg font-semibold text-ink-100">
               {mode === "signin" ? "登录后开始聊天" : "创建一个账号"}
             </h1>
-            <p className="mt-1 text-xs text-ink-400">浏览历史消息不需要登录，发言才需要</p>
+            <p className="mt-1 text-xs text-ink-400">登录后才能查看聊天记录并发言</p>
           </div>
         </div>
 

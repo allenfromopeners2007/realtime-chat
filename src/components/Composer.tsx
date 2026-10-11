@@ -128,7 +128,7 @@ export function Composer({ user, sending, onSend, onUpload, onError }: Props) {
           <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
             <span className="flex items-center gap-2">
               <LockIcon className="h-3.5 w-3.5 shrink-0" />
-              登录后才能发言；只浏览历史消息不需要登录。
+              登录后才能查看和发送消息。
             </span>
             <Link
               href="/login"

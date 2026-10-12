@@ -79,37 +79,86 @@ export async function POST(request: NextRequest) {
   //    这里不带查询参数，避免 Supabase 跳转白名单匹配不上 ✓
   const redirectTo = new URL("/auth/callback", request.nextUrl.origin).toString();
 
+  // ④ 生成"可以直接复制的邀请链接"（不依赖邮件送达 ✓）
+  //
+  // 为什么两件事都做：
+  //   邮件可能被过滤/延迟 ✗ 而同学本来就在微信/QQ 群里 ✓
+  //   所以：邮件照发（能收到就用邮件）＋ 同时返回一条链接，管理员可以复制后直接发给他 ✓
+  //
+  // 类型选择：
+  //   invite    —— 新用户（会创建账号 + 生成接受邀请的链接）
+  //   magiclink —— 已有账号的人（生成一次性登录链接，同样会落到 /welcome 让他设密码）
+  async function makeLink(): Promise<{ link: string; kind: string } | null> {
+    const client = admin;
+    if (!client) return null;
+
+    for (const kind of ["invite", "magiclink"] as const) {
+      try {
+        const { data: generated, error: genError } = await client.auth.admin.generateLink({
+          type: kind,
+          email,
+          options: { redirectTo },
+        });
+        const link = generated?.properties?.action_link ?? null;
+        if (!genError && link) return { link, kind };
+        if (genError) console.warn(`[api/admin/invite] generateLink(${kind}) 失败：`, genError.message);
+      } catch (caught) {
+        console.warn(`[api/admin/invite] generateLink(${kind}) 异常：`, caught);
+      }
+    }
+    return null;
+  }
+
+  // 先发邀请邮件（会创建账号）；失败时不再直接返回，而是继续尝试生成链接 ——
+  // 因为"邮件发不出去"和"账号建不了"是两件事 ✓
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
 
-  if (error) {
-    const message = error.message ?? "";
-    console.error("[api/admin/invite] 邀请失败：", message);
+  const alreadyExists = Boolean(
+    error && /already been registered|already registered|already exists|email address is already/i.test(error.message ?? ""),
+  );
+  const rateLimited = Boolean(error && /rate limit|too many|over_email_send_rate_limit/i.test(error.message ?? ""));
+  const keyBroken = Boolean(
+    error && /invalid api key|invalid jwt|jwt|unauthorized|not allowed|missing sub|forbidden|bad_jwt/i.test(error.message ?? ""),
+  );
 
-    if (/already been registered|already registered|already exists|email address is already/i.test(message)) {
-      return jsonError("这个邮箱已经有账号了 —— 让他直接登录即可（忘了密码就在 Supabase 后台重置）", 409);
-    }
-    if (/rate limit|too many|over_email_send_rate_limit/i.test(message)) {
-      return jsonError(
-        "邮件发送频率超限了，请等几分钟；长期需要更多就去 Supabase → Authentication → Rate Limits 调高",
-        429,
-      );
-    }
-    // 密钥不对/被截断/拿成了 anon key 时，Supabase 会返回这类报错 —— 给一句能直接照做的提示
-    if (/invalid api key|invalid jwt|jwt|unauthorized|not allowed|missing sub|forbidden|bad_jwt/i.test(message)) {
-      return jsonError(
-        "密钥不对：SUPABASE_SERVICE_ROLE_KEY 可能填成了 anon/publishable key，或者复制时被截断了。" +
-          "请回到 Supabase → Settings → API Keys，复制 service_role / sb_secret_ 那一串（不是 anon），" +
-          "更新变量后重新部署一次",
-        500,
-      );
-    }
-    return jsonError(`邀请失败：${message}`, 500);
+  if (error && !alreadyExists && !rateLimited) {
+    console.error("[api/admin/invite] 邀请失败：", error.message);
   }
+
+  // 密钥本身不对时，生成链接也一定会失败 —— 直接给明确提示，别让用户猜
+  if (keyBroken) {
+    return jsonError(
+      "密钥不对：SUPABASE_SERVICE_ROLE_KEY 可能填成了 anon/publishable key，或者复制时被截断了。" +
+        "请回到 Supabase → Settings → API Keys，复制 service_role / sb_secret_ 那一串（不是 anon），" +
+        "更新变量后重新部署一次",
+      500,
+    );
+  }
+
+  // ⑤ 生成可复制的链接（邮件失败也没关系 ✓）
+  const generated = await makeLink();
 
   const invitedId = data?.user?.id ?? null;
   console.log(
-    `[api/admin/invite] 管理员 ${guard.ctx.username}(${guard.ctx.userId}) 邀请了 ${email} → ${invitedId ?? "已发出"}`,
+    `[api/admin/invite] 管理员 ${guard.ctx.username}(${guard.ctx.userId}) 处理了 ${email}` +
+      ` → 用户 ${invitedId ?? "?"}；邮件 ${error ? `失败(${error.message})` : "已发出"}；` +
+      `链接 ${generated ? generated.kind : "未生成"}`,
   );
 
-  return jsonOk({ email, userId: invitedId });
+  // 邮件成功 + 有链接 → 两种方式都给管理员 ✓
+  // 邮件失败/被过滤 → 至少还有链接可用，不算彻底失败 ✓
+  const warnings: string[] = [];
+  if (alreadyExists) warnings.push("这个邮箱已经有账号了（下面这条链接会让他直接登录并设置密码）");
+  else if (rateLimited) warnings.push("邮件发送频率超限，暂时没发出邮件 —— 下面这条链接可以直接发给他");
+  else if (error) warnings.push(`邮件没发出去（${error.message}）—— 用下面这条链接代替`);
+  if (!generated) warnings.push("链接也生成失败了，请看服务端日志");
+
+  return jsonOk({
+    email,
+    userId: invitedId,
+    inviteLink: generated?.link ?? null,
+    linkKind: generated?.kind ?? null,
+    emailSent: !error,
+    warnings,
+  });
 }

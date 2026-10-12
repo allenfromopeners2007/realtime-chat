@@ -74,8 +74,10 @@ export async function POST(request: NextRequest) {
     return jsonError(`发送太频繁了（每分钟最多 ${MAX_INVITES_PER_MINUTE} 个），请等一分钟再试`, 429);
   }
 
-  // ④ 发出邀请：点邮件链接 → 走我们的回调换取登录态 → 到 /welcome 设密码
-  const redirectTo = new URL("/auth/callback?next=/welcome", request.nextUrl.origin).toString();
+  // ④ 发出邀请：点邮件链接 → /auth/callback（客户端页面，能读到 #片段 里的令牌）
+  //    → 它会自动把新同学送到 /welcome 设置密码 ✓
+  //    这里不带查询参数，避免 Supabase 跳转白名单匹配不上 ✓
+  const redirectTo = new URL("/auth/callback", request.nextUrl.origin).toString();
 
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
 

@@ -94,6 +94,15 @@ export async function POST(request: NextRequest) {
         429,
       );
     }
+    // 密钥不对/被截断/拿成了 anon key 时，Supabase 会返回这类报错 —— 给一句能直接照做的提示
+    if (/invalid api key|invalid jwt|jwt|unauthorized|not allowed|missing sub|forbidden|bad_jwt/i.test(message)) {
+      return jsonError(
+        "密钥不对：SUPABASE_SERVICE_ROLE_KEY 可能填成了 anon/publishable key，或者复制时被截断了。" +
+          "请回到 Supabase → Settings → API Keys，复制 service_role / sb_secret_ 那一串（不是 anon），" +
+          "更新变量后重新部署一次",
+        500,
+      );
+    }
     return jsonError(`邀请失败：${message}`, 500);
   }
 

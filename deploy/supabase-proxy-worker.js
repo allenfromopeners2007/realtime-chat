@@ -76,10 +76,17 @@ export default {
     //   - **实时推送的 WebSocket**：浏览器 `new WebSocket()` **不能自定义请求头**，
     //     所以 supabase-js 只能把 apikey 拼在 URL 查询参数里（?apikey=...&vsn=1.0.0）。
     //     只认请求头的话，实时连接会被 401 挡掉 → 前端一直显示「离线（15s 轮询）」。
+    //
+    // ⚠️⚠️ 邮箱链接也必须放行：邀请 / 改密码 / 一次性登录的链接是**浏览器直接打开**的，
+    // 不会带任何请求头，也不会有 ?apikey= —— 之前这里返回 "missing apikey"，
+    // 导致同学点邀请链接只能看到一个 JSON 报错 ✗
+    // 这两个端点本身就要靠 token 鉴权（token 猜不出来），放行没有安全风险 ✓
     const isPublicObject = url.pathname.startsWith("/storage/v1/object/public/");
+    const isEmailLink =
+      url.pathname === "/auth/v1/verify" || url.pathname === "/auth/v1/callback";
     const hasApiKey =
       Boolean(request.headers.get("apikey")) || url.searchParams.has("apikey");
-    if (!isPublicObject && !hasApiKey) {
+    if (!isPublicObject && !isEmailLink && !hasApiKey) {
       return json({ error: "missing apikey" }, 401);
     }
 

@@ -98,6 +98,23 @@ console.log("========== 3) apikey 校验 ==========");
   check("公开图片不带 apikey 也能过", response.status === 200, `HTTP ${response.status}`);
 }
 {
+  // ★ 邮箱链接：同学在浏览器里直接打开邀请/改密码/一次性登录链接，
+  //   不会带 apikey 请求头，也不会有 ?apikey= —— 必须放行 ✓
+  const { response } = await run(
+    "/auth/v1/verify?token=abc&type=invite&redirect_to=https%3A%2F%2Fapp.example.com%2Fauth%2Fcallback",
+  );
+  check("邮箱验证链接不带 apikey 也能过（同学点链接的关键）", response.status === 200, `HTTP ${response.status}`);
+}
+{
+  const { response } = await run("/auth/v1/callback");
+  check("OAuth/邮件回调路径同样放行", response.status === 200, `HTTP ${response.status}`);
+}
+{
+  // 但只放行那两个端点，不能顺手把整个 /auth/ 都放开
+  const { response } = await run("/auth/v1/token");
+  check("其它 /auth/ 路径仍要求 apikey", response.status === 401, `HTTP ${response.status}`);
+}
+{
   // ★ 浏览器 WebSocket 不能自定义请求头，supabase-js 把 apikey 放在查询参数里。
   //   只认请求头的话会把实时连接挡掉（线上表现为一直「离线，15s 轮询」）。
   const { response, captured: c } = await run("/realtime/v1/websocket?apikey=anon-key&vsn=1.0.0", {

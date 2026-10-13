@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { requireAdmin } from "@/lib/admin";
 import { jsonError, jsonOk, readJsonBody } from "@/lib/api-response";
+import { SUPABASE_URL, SUPABASE_URL_SERVER } from "@/lib/env";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,19 @@ export async function POST(request: NextRequest) {
   //   invite    —— 还没确认的新用户：接受邀请 + 设密码
   //   recovery  —— 已经有账号的人：改密码（也正是卡住的人需要的 ✓）
   //   magiclink —— 兜底：一次性登录链接，同样会落到 /welcome 让他设密码 ✓
+  //
+  // ⚠️ 关键：Supabase 生成的 action_link 指向它自己的域名
+  //     https://lvntlhgpalgbgrsloxyy.supabase.co/auth/v1/verify?...
+  //     而这个域名【在国内是被墙的】✗✗ 同学点开根本打不开 ✓
+  //     → 所以必须把域名换成我们自己的、国内可达的反向代理（sb.theopener.top）✓
+  //     浏览器 ⇒ Worker ⇒ Supabase，验证通过后 Worker 会把跳转原样带回来 ✓
+  function toBrowserReachable(url: string): string {
+    if (SUPABASE_URL_SERVER !== "" && SUPABASE_URL !== "" && SUPABASE_URL !== SUPABASE_URL_SERVER) {
+      return url.split(SUPABASE_URL_SERVER).join(SUPABASE_URL);
+    }
+    return url;
+  }
+
   async function makeLink(): Promise<{ link: string; kind: string } | null> {
     const client = admin;
     if (!client) return null;
@@ -100,8 +114,8 @@ export async function POST(request: NextRequest) {
           email,
           options: { redirectTo },
         });
-        const link = generated?.properties?.action_link ?? null;
-        if (!genError && link) return { link, kind };
+        const raw = generated?.properties?.action_link ?? null;
+        if (!genError && raw) return { link: toBrowserReachable(raw), kind };
         if (genError) console.warn(`[api/admin/invite] generateLink(${kind}) 失败：`, genError.message);
       } catch (caught) {
         console.warn(`[api/admin/invite] generateLink(${kind}) 异常：`, caught);

@@ -34,15 +34,38 @@ export default function AuthCallbackPage() {
     }
 
     const params = new URLSearchParams(window.location.search);
+    // ⚠️ Supabase 出错时把错误信息放在 #片段 里（服务端读不到，只有浏览器能读 ✓）
+    //    例如：/auth/callback#error=access_denied&error_code=otp_expired&error_description=...
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+    // 诊断用：只记录参数名，不记录任何令牌值 ✓
+    console.log("[auth/callback] 收到的参数名：", {
+      search: [...params.keys()],
+      hash: [...hashParams.keys()],
+    });
 
     // 只允许站内跳转，避免开放重定向
     const rawNext = params.get("next") ?? "/welcome";
     const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/welcome";
 
-    const errorDescription = params.get("error_description") ?? params.get("error");
-    if (errorDescription) {
+    const errorCode = params.get("error_code") ?? hashParams.get("error_code") ?? "";
+    const rawError =
+      params.get("error_description") ??
+      params.get("error") ??
+      hashParams.get("error_description") ??
+      hashParams.get("error");
+
+    if (errorCode === "otp_expired" || /expired|invalid/i.test(rawError ?? "")) {
       setFailed(true);
-      setMessage(errorDescription);
+      setMessage(
+        "这个邀请链接已经失效或过期了（链接是一次性的：用过一次、或超过 24 小时就会失效）。请找管理员重新发一条。",
+      );
+      return;
+    }
+
+    if (rawError) {
+      setFailed(true);
+      setMessage(rawError);
       return;
     }
 

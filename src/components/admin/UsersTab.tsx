@@ -14,6 +14,7 @@ import {
   Td,
   Th,
 } from "@/components/admin/ui";
+import { InviteResultCard, type InviteResult } from "@/components/admin/InviteResultCard";
 import { apiFetch, describeApiError } from "@/lib/http";
 import { formatTime } from "@/lib/format";
 import { normalizeAdminUser, type AdminUser } from "@/lib/types";
@@ -32,6 +33,8 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  /** 「重发邀请」的结果（含可复制的链接） */
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +55,39 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
     void load();
   }, [load]);
 
+  /**
+   * 重发邀请：给"已经存在但卡在设置密码"的同学重新生成邮件 + 可复制链接 ✓
+   * 复用 /api/admin/invite（它会按 invite → recovery → magiclink 依次尝试生成链接）
+   */
+  async function resendInvite(user: AdminUser) {
+    const target = (user.email ?? "").trim();
+    if (target === "") {
+      notify("error", "这个账号没有邮箱，无法重发邀请");
+      return;
+    }
+
+    setBusyId(user.id);
+    setInviteResult(null);
+    try {
+      const data = await apiFetch<InviteResult>("/api/admin/invite", {
+        method: "POST",
+        body: JSON.stringify({ email: target }),
+        context: "重发邀请",
+      });
+      setInviteResult(data);
+      notify(
+        data.inviteLink ? "success" : "error",
+        data.inviteLink
+          ? `已为 ${user.username} 重新生成邀请 ✓ 把下面的链接发给他`
+          : "重发失败，请看下方提示",
+      );
+    } catch (cause) {
+      const message = describeApiError(cause);
+      notify("error", message);
+    } finally {
+      setBusyId(null);
+    }
+  }
   async function patch(userId: string, body: Record<string, unknown>, successText: string) {
     setBusyId(userId);
     try {
@@ -79,6 +115,16 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
       subtitle="封禁后该用户仍能登录、能看历史消息，但无法发言 —— 由数据库 RLS 强制执行，绕不过去"
       actions={<Button onClick={() => void load()}>刷新</Button>}
     >
+      {inviteResult && (
+        <div className="mb-4">
+          <InviteResultCard
+            result={inviteResult}
+            notify={notify}
+            title={`重新邀请：${inviteResult.email}`}
+          />
+        </div>
+      )}
+
       <TableWrap>
         <thead>
           <tr className="border-b border-ink-800">
@@ -170,6 +216,14 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
                       disabled={busy}
                     >
                       改名
+                    </Button>
+
+                    <Button
+                      onClick={() => void resendInvite(user)}
+                      disabled={busy}
+                      title="给这个人重新生成邀请邮件 + 可复制的链接（卡在设置密码的人用这个）"
+                    >
+                      重发邀请
                     </Button>
 
                     {/* 任免管理员：只有所有者(owner)能操作 ✓ 普通管理员看不到这些按钮 */}

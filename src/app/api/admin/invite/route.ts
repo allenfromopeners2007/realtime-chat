@@ -79,20 +79,21 @@ export async function POST(request: NextRequest) {
   //    这里不带查询参数，避免 Supabase 跳转白名单匹配不上 ✓
   const redirectTo = new URL("/auth/callback", request.nextUrl.origin).toString();
 
-  // ④ 生成"可以直接复制的邀请链接"（不依赖邮件送达 ✓）
+  // ⑤ 生成"可以直接复制的邀请链接"（不依赖邮件送达 ✓）
   //
-  // 为什么两件事都做：
-  //   邮件可能被过滤/延迟 ✗ 而同学本来就在微信/QQ 群里 ✓
-  //   所以：邮件照发（能收到就用邮件）＋ 同时返回一条链接，管理员可以复制后直接发给他 ✓
+  // 为什么邮件和链接都做：
+  //   邮件可能被过滤/延迟/进垃圾箱 ✗ 而同学本来就在微信/QQ 群里 ✓
+  //   所以：邮件照发（能收到最省事）＋ 同时给一条链接，管理员复制后直接发给他 ✓
   //
-  // 类型选择：
-  //   invite    —— 新用户（会创建账号 + 生成接受邀请的链接）
-  //   magiclink —— 已有账号的人（生成一次性登录链接，同样会落到 /welcome 让他设密码）
+  // 三种类型依次尝试（对"之前邀请过、卡在设密码"的人特别有用 ✓）：
+  //   invite    —— 还没确认的新用户：接受邀请 + 设密码
+  //   recovery  —— 已经有账号的人：改密码（也正是卡住的人需要的 ✓）
+  //   magiclink —— 兜底：一次性登录链接，同样会落到 /welcome 让他设密码 ✓
   async function makeLink(): Promise<{ link: string; kind: string } | null> {
     const client = admin;
     if (!client) return null;
 
-    for (const kind of ["invite", "magiclink"] as const) {
+    for (const kind of ["invite", "recovery", "magiclink"] as const) {
       try {
         const { data: generated, error: genError } = await client.auth.admin.generateLink({
           type: kind,

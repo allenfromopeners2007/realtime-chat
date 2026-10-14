@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { jsonError, jsonOk, readJsonBody } from "@/lib/api-response";
 import { mapAdminError, requireAdmin, requireOwner } from "@/lib/admin";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizeAdminUser } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ type PatchBody = {
   banned?: unknown;
   reason?: unknown;
   username?: unknown;
+  /** 管理员给账号直接设的密码（action=setPassword） */
+  password?: unknown;
 };
 
 /**
@@ -93,6 +96,50 @@ export async function PATCH(request: NextRequest) {
     const { error } = await supabase.from("profiles").update({ username }).eq("id", userId);
     if (error) return jsonError(mapAdminError(error.message), 400);
     return jsonOk({ ok: true, username });
+  }
+
+  if (action === "setPassword") {
+    // 给某个账号【直接设一个密码】—— 这是最可靠的加人方式 ✓
+    //   不依赖邮件投递（163 投递不稳 ✗）
+    //   不依赖一次性链接（会被"重发"或链接预览消耗掉 ✗）
+    //   不依赖被墙的 supabase.co 域名 ✗
+    // 属于高危操作（能接管任何账号）→ 只有所有者能做 ✓
+    const ownerGuard = await requireOwner();
+    if (!ownerGuard.ok) return ownerGuard.response;
+
+    const password = typeof parsed.data.password === "string" ? parsed.data.password : "";
+    if (password.length < 6) return jsonError("密码至少要 6 位", 400);
+    if (password.length > 72) return jsonError("密码最多 72 位", 400);
+
+    const admin = getSupabaseAdminClient();
+    if (!admin) {
+      return jsonError(
+        "还没有配置 SUPABASE_SERVICE_ROLE_KEY —— 请到部署平台的环境变量里加上它（只放服务端，不要加 NEXT_PUBLIC_ 前缀），然后重新部署一次",
+        503,
+      );
+    }
+
+    // email_confirm: true —— 顺手把"邮箱未确认"也解掉，
+    // 否则被邀请过但没走完流程的账号设了密码也登不进去 ✗
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+    });
+    if (error) {
+      console.error("[api/admin/users] 设置密码失败：", error.message);
+      const message = error.message ?? "";
+      if (/invalid api key|jwt|unauthorized|not allowed|forbidden/i.test(message)) {
+        return jsonError(
+          "密钥不对：SUPABASE_SERVICE_ROLE_KEY 可能填成了 anon key 或被截断了，请更新后重新部署",
+          500,
+        );
+      }
+      return jsonError(`设置密码失败：${message}`, 500);
+    }
+
+    console.log(`[api/admin/users] 管理员 ${guard.ctx.username} 给 ${userId} 设置了一个新密码`);
+    // 把密码回传给管理员，方便他复制后发给同学 ✓（只显示在他自己的页面上 ✓）
+    return jsonOk({ ok: true, userId, password });
   }
 
   return jsonError(`未知操作：${action || "(空)"}`, 400);

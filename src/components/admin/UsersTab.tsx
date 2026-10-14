@@ -33,8 +33,45 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  /** 正在给谁设密码（内联输入框） */
+  const [passwordFor, setPasswordFor] = useState<string | null>(null);
+  const [passwordValue, setPasswordValue] = useState("");
   /** 「重发邀请」的结果（含可复制的链接） */
   const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+
+  /**
+   * 管理员直接给账号设一个密码 —— 最可靠的加人方式 ✓
+   *
+   * 为什么需要它：邀请链接是一次性令牌 ✗ 会被"重发"/链接预览消耗掉，
+   * 邮件投递也不稳 ✗ 而同学本来就常用微信接收信息 ✓
+   * 设好密码后把「邮箱 + 密码」发给同学，他打开网址就能登录 ✓
+   */
+  async function applyPassword(user: AdminUser) {
+    const password = passwordValue.trim();
+    if (password.length < 6) {
+      notify("error", "密码至少要 6 位");
+      return;
+    }
+
+    setBusyId(user.id);
+    try {
+      await apiFetch("/api/admin/users", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: user.id, action: "setPassword", password }),
+        context: "设置密码",
+      });
+      setPasswordFor(null);
+      setPasswordValue("");
+      notify(
+        "success",
+        `已给 ${user.username} 设好密码：${password} —— 复制这个密码，连同他的邮箱一起发给同学`,
+      );
+    } catch (cause) {
+      notify("error", describeApiError(cause));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,24 +244,65 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
                 </Td>
 
                 <Td>
-                  <span className="flex flex-wrap items-center justify-end gap-1.5">
-                    <Button
-                      onClick={() => {
-                        setRenamingId(user.id);
-                        setRenameValue(user.username);
-                      }}
-                      disabled={busy}
-                    >
-                      改名
-                    </Button>
+                  {passwordFor === user.id ? (
+                    <span className="flex flex-wrap items-center justify-end gap-1.5">
+                      <input
+                        autoFocus
+                        value={passwordValue}
+                        onChange={(event) => setPasswordValue(event.target.value)}
+                        maxLength={72}
+                        placeholder="新密码（≥6 位）"
+                        className="h-7 w-32 rounded-lg border border-ink-700 bg-ink-950 px-2 text-xs text-ink-100 outline-none focus:border-brand-500/60"
+                      />
+                      <Button
+                        variant="primary"
+                        busy={busy}
+                        onClick={() => void applyPassword(user)}
+                      >
+                        存
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setPasswordFor(null);
+                          setPasswordValue("");
+                        }}
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap items-center justify-end gap-1.5">
+                      <Button
+                        onClick={() => {
+                          setRenamingId(user.id);
+                          setRenameValue(user.username);
+                        }}
+                        disabled={busy}
+                      >
+                        改名
+                      </Button>
 
-                    <Button
-                      onClick={() => void resendInvite(user)}
-                      disabled={busy}
-                      title="给这个人重新生成邀请邮件 + 可复制的链接（卡在设置密码的人用这个）"
-                    >
-                      重发邀请
-                    </Button>
+                      {/* 设密码：只有所有者能做（能接管账号，属于高危操作）*/}
+                      {isOwner && (
+                        <Button
+                          onClick={() => {
+                            setPasswordFor(user.id);
+                            setPasswordValue("");
+                          }}
+                          disabled={busy}
+                          title="直接给这个账号设一个密码，然后把「邮箱 + 密码」发给同学（最可靠的加人方式）"
+                        >
+                          设密码
+                        </Button>
+                      )}
+
+                      <Button
+                        onClick={() => void resendInvite(user)}
+                        disabled={busy}
+                        title="给这个人重新生成邀请邮件 + 可复制的链接（卡在设置密码的人用这个）"
+                      >
+                        重发邀请
+                      </Button>
 
                     {/* 任免管理员：只有所有者(owner)能操作 ✓ 普通管理员看不到这些按钮 */}
                     {isOwner && user.role === "owner" ? (
@@ -270,6 +348,7 @@ export function UsersTab({ adminId, isOwner, notify }: Props) {
                       />
                     )}
                   </span>
+                  )}
                 </Td>
               </tr>
             );

@@ -51,9 +51,9 @@ export function InviteResultCard({
     <Card
       title={title ?? `邀请结果：${result.email}`}
       subtitle={
-        result.emailSent
-          ? "邮件已发出 ✓ 同时也可以用下面的链接"
-          : "邮件没能发出 ✗ 请用下面的链接（效果一样）"
+        result.inviteLink
+          ? "把下面的链接发给同学即可（微信/QQ 最稳）· 有效期 7 天 · 可重复打开"
+          : "生成失败 ✗ 请看下面的提示"
       }
     >
       <div className="space-y-3">
